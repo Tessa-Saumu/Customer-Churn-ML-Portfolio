@@ -1,9 +1,29 @@
 # Customer Churn Prediction & Business Intelligence Platform
 
-An end-to-end analytics platform that identifies customers likely to churn and surfaces actionable recommendations through a Power BI dashboard and a FastAPI service.
+A mentored team capstone connecting a telecom churn dataset, comparative classification, a local FastAPI service and Power BI reporting.
 
-**Timeline:** 9-day target (mentor ceiling: 14 days)  
-**Dataset:** [IBM Telco Customer Churn — Cognos Analytics version](https://www.kaggle.com/datasets/yeanzc/telco-customer-churn-ibm-dataset)
+## Problem and personal contribution
+
+The team built a local workflow over the [IBM Telco dataset](https://www.kaggle.com/datasets/yeanzc/telco-customer-churn-ibm-dataset). As team lead, Theresia Saumu implemented real model/API integration, the training-to-inference field adapter, leakage correction and automated ETL/API/model tests. Evidence: [integration PR #27](https://github.com/Tessa-Saumu/Customer-Churn-Prediction-BI-Platform/pull/27), test PRs [#29](https://github.com/Tessa-Saumu/Customer-Churn-Prediction-BI-Platform/pull/29), [#30](https://github.com/Tessa-Saumu/Customer-Churn-Prediction-BI-Platform/pull/30), [#31](https://github.com/Tessa-Saumu/Customer-Churn-Prediction-BI-Platform/pull/31), and [contribution map](CONTRIBUTORS.md).
+
+ETL, model training, API scaffolding, SQL analysis and dashboard work had other owners. Mentor contributions include scaffolding, pagination, Docker and Streamlit. This is team integration and QA evidence, not sole authorship of the platform.
+
+## Evaluation and key finding
+
+Integration exposed an outcome-derived `churn_score` feature unavailable in real prediction requests. It was removed from model inputs and the comparison was rerun. The [committed comparison](evaluation/model_comparison.md) selects logistic regression with ROC AUC **0.8494**, accuracy **0.8020**, precision **0.6480** and recall **0.5561**. Earlier leakage-affected figures are not valid predictive-performance evidence.
+
+Five candidates were compared on one stratified split, so this holdout also served model selection; it is not an untouched final evaluation. No temporal/geographic generalization, causal impact or production use is established.
+
+## Limitations and current status
+
+- **Known KPI regression:** `kpi_service.get_kpis()` calls `CustomerRepository.get_all()` with its default page size of 100. `/kpis` therefore summarizes the first 100 rows, not all 7,043. Dashboard dataset totals must not be interpreted as evidence that this API endpoint is correct.
+- Existing tests do not catch that regression; many integration tests skip when generated database/model artifacts are absent. Historical full-suite success is not a claim of current system correctness.
+- Endpoint verification scripts contain stale assertions (including pre-leakage metrics in the shell script) and are not reliable acceptance gates for the current tree.
+- No cloud deployment is established. The deployment workflow is disabled, dependencies are unpinned, and no green CI claim is made. Docker/Streamlit files exist; their presence does not prove a working deployment.
+- The committed Power BI screenshots are historical report captures. The refresh instructions below describe the intended local setup, not a newly verified live ODBC connection.
+- Code defects and evaluation protocols were not changed for this documentation pass.
+
+**Project work:** July-August 2026. The earlier nine-day figure was a planning target, not demonstrated elapsed delivery time.
 
 ---
 
@@ -16,7 +36,6 @@ An end-to-end analytics platform that identifies customers likely to churn and s
 5. [Milestones](#milestones)
 6. [Running the Project](#running-the-project)
 7. [Power BI Dashboard Setup](#power-bi-dashboard-setup)
-8. [Stretch Goals](#stretch-goals)
 9. [Coding Standards](#coding-standards)
 10. [Data Dictionary and SQL Views](#data-dictionary-and-sql-views)
 11. [Project Process & Collaboration](#project-process--collaboration)
@@ -29,7 +48,7 @@ An end-to-end analytics platform that identifies customers likely to churn and s
 
 - **Git** — [install instructions](https://git-scm.com/downloads)
 - **Python 3.12** — confirm with `python --version`
-- A GitHub account added as a collaborator on this repository
+- Public read access is sufficient to clone; collaborator access is needed only to push.
 
 ### Clone the repository
 
@@ -146,7 +165,7 @@ Prediction Service
 FastAPI (5 endpoints, API key auth)
 │
 ▼
-Power BI Dashboard (connected via ODBC)
+Power BI Dashboard (documented local import/refresh setup)
 ```
 
 ### Models
@@ -173,12 +192,12 @@ All endpoints require an `X-API-Key` header except `/health`.
 
 | Name       | Role                          | Deliverables                                                             |
 |-----------|-------------------------------|-------------------------------------------------------------------------|
-| **Theresia** | Team Lead                    | Sprint planning, GitHub issues, board maintenance, standups, coding standards, final integration, presentation coordination |
+| **Theresia** | Team Lead / Integration & QA | Technical review, real model/API integration, leakage correction, ETL/API/model tests and final integration |
 | **Mercy**    | Lead Data Engineer           | `etl/`, `database/`, `repository/`, `sql/`                              |
 | **Latifah**  | Lead ML Engineer             | `models/`, `training/`, `evaluation/`, `predict.py`                     |
 | **Praise**   | Backend/API Engineer         | `api/`, `services/`, `schemas/`                                         |
 | **Joyce**    | Lead BI & Analytics          | `dashboard/`, `business_report.md`                                      |
-| **Pamela**   | Lead Testing & QA            | `tests/`, `test_api.py`, `test_models.py`, `test_etl.py`                |
+| **Pamela** | Planned Testing & QA lead | Automated test implementation ultimately completed by Theresia; see CONTRIBUTORS.md |
 | **Salome**   | Lead Data Analyst & Documentation | `README.md`, `docs/`, `data_dictionary.md`                         |
 
 **Coordination note:** Joyce and Salome must stay in sync — the dashboard connects directly to the SQL views Salome produces, so any change to view names or structure should be communicated directly, not left to surface at standup. 
@@ -231,7 +250,7 @@ Run the complete model training and evaluation pipeline:
 python training/evaluate_models.py
 ```
 
-This command will: [1]
+This command is intended to:
 
 - Train all five machine learning models:
   - Logistic Regression
@@ -268,12 +287,12 @@ python training/evaluate_models.py
 uvicorn app.main:app --reload
 ```
 
-Then, in a separate terminal, verify all 5 endpoints: 
+The historical endpoint scripts can be inspected or run below, but their known stale assertions and the KPI regression mean they are not expected to pass as acceptance checks:
 
 **macOS / Linux:**
 
 ```bash
-API_KEY=<your-key-from-.env> ./scripts/verify_endpoints.sh
+API_KEY=<your-key-from-.env> bash scripts/verify_endpoints.sh
 ```
 
 **Windows (PowerShell):**
@@ -293,7 +312,7 @@ curl http://localhost:8000/health
 
 ### 4. Run tests
 
-To run the SQL views tests only: [1]
+To run the SQL views tests only:
 
 ```bash
 python -m pytest tests/test_sql_views.py
@@ -370,7 +389,7 @@ This is a one-time local setup step, same as the DSN above — it is not committ
 
 Whenever the underlying data changes (new ETL run, updated views, or a new model evaluation in `evaluation/model_comparison.md`): 
 
-1. Re-run the relevant pipeline step (ETL, views, or model evaluation/CSV regeneration — see `evaluation/generate_model_comparison_csv.py`).
+1. Re-run the relevant pipeline step (ETL, views, or model evaluation/CSV regeneration — see `scripts/generate_model_comparison_csv.py`).
 2. Open `dashboard/churn_dashboard.pbix` in Power BI Desktop.
 3. Click **Refresh** on the Home tab to pull the latest data through the live ODBC connection.
 4. Save the file.
@@ -388,24 +407,11 @@ Placing this link in the Dashboard section keeps business-facing content close t
 
 ---
 
-## Stretch Goals
-
-If core milestones (M0–M6) finish ahead of schedule, the following are owned by Michael and pursued at his discretion:
-
-- SHAP explainability
-- Docker
-- GitHub Actions CI
-- Deployment to cloud
-- PostgreSQL instead of SQLite
-- Streamlit demo app
-
----
-
 ## Coding Standards
 
 - **Typing required** on all functions — use the `typing` module or built-in generics.
 - **No `print()`** — use the `logging` module for all runtime output.
-- **Tests required** for every feature — no hard coverage percentage target, but meaningful tests must exist and CI must pass.
+- **Tests required** for every feature — no hard coverage percentage target, but meaningful tests are expected. This is a project convention; no active CI currently enforces it.
 - Pragmatic code is preferred over strict SOLID/clean-architecture adherence — clarity and correctness first.
 
 ---
