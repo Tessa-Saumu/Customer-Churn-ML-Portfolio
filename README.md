@@ -1,5 +1,7 @@
 # Customer Churn Prediction & Business Intelligence Platform
 
+This is Theresia Saumu's personal portfolio copy of the [original team repository](https://github.com/Tessa-Saumu/Customer-Churn-Prediction-BI-Platform). It preserves the team's Git history and contributor credits. The application documentation changes live on this copy's `main` branch; they do not change the shared project. GitHub does not mark this as a native fork because the shared repository is already owned by the same account.
+
 A mentored team capstone connecting a telecom churn dataset, comparative classification, a local FastAPI service and Power BI reporting.
 
 ## Problem and personal contribution
@@ -53,8 +55,8 @@ Five candidates were compared on one stratified split, so this holdout also serv
 ### Clone the repository
 
 ```bash
-git clone https://github.com/Tessa-Saumu/Customer-Churn-Prediction-BI-Platform.git
-cd Customer-Churn-Prediction-BI-Platform
+git clone https://github.com/Tessa-Saumu/Customer-Churn-ML-Portfolio.git
+cd Customer-Churn-ML-Portfolio
 ```
 
 ### Set up your local environment
