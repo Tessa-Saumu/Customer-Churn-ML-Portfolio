@@ -56,6 +56,7 @@ present -- this makes the suite runnable in CI without secrets.
 
 from __future__ import annotations
 
+import sqlite3
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -250,6 +251,107 @@ class TestKpisEndpoint:
         assert body["overall_churn_rate"] + body["retention_rate"] == pytest.approx(
             100.0, abs=0.1
         )
+
+    def test_kpis_customer_count_matches_the_whole_database(
+        self, client: "TestClient"
+    ) -> None:
+        """
+        FGA-01 regression guard (Phase 1).
+
+        /kpis used to be computed from CustomerRepository.get_all(),
+        which returns one page (default 100 rows), so the endpoint
+        reported a page as if it were the population. The check above
+        could not catch that: 100.0 + 0.0 sums to 100 just fine.
+
+        This asserts the endpoint's customer_count equals the actual
+        row count in database/churn.db, computed here with direct SQL
+        rather than through the service under test. On the tracked
+        dataset that is 7,043; any page-scoped implementation reports
+        100 and fails.
+        """
+        response = client.get("/kpis", headers={"X-API-Key": TEST_API_KEY})
+        body = response.json()
+
+        connection = sqlite3.connect(DB_PATH)
+        try:
+            expected_count = connection.execute(
+                "SELECT COUNT(*) FROM customers"
+            ).fetchone()[0]
+        finally:
+            connection.close()
+
+        assert body["customer_count"] == expected_count
+        assert expected_count > 100, (
+            "This guard only means something with more than 100 rows in the "
+            "database; run the ETL pipeline (python etl/load_to_db.py)."
+        )
+
+    def test_kpis_churn_rate_matches_the_whole_database(
+        self, client: "TestClient"
+    ) -> None:
+        """
+        Companion to the count check above: the churn rate must be the
+        population rate, not the first page's. On the tracked dataset
+        the first 100 rows are all churned, so a page-scoped
+        implementation reports 100.0 instead of 26.54.
+        """
+        response = client.get("/kpis", headers={"X-API-Key": TEST_API_KEY})
+        body = response.json()
+
+        connection = sqlite3.connect(DB_PATH)
+        try:
+            churned, total = connection.execute(
+                """
+                SELECT SUM(CASE WHEN churn_label = 'Yes' THEN 1 ELSE 0 END),
+                       COUNT(*)
+                FROM customers
+                """
+            ).fetchone()
+        finally:
+            connection.close()
+
+        assert body["overall_churn_rate"] == pytest.approx(
+            round(100.0 * churned / total, 2)
+        )
+        assert body["retention_rate"] == pytest.approx(
+            round(100.0 - round(100.0 * churned / total, 2), 2)
+        )
+
+    def test_kpis_totals_match_the_whole_database(self, client: "TestClient") -> None:
+        """Same whole-table reference for the charge aggregates."""
+        response = client.get("/kpis", headers={"X-API-Key": TEST_API_KEY})
+        body = response.json()
+
+        connection = sqlite3.connect(DB_PATH)
+        try:
+            total_charges, avg_charges = connection.execute(
+                """
+                SELECT SUM(monthly_charges),
+                       SUM(monthly_charges) / COUNT(*)
+                FROM customers
+                """
+            ).fetchone()
+        finally:
+            connection.close()
+
+        assert body["total_monthly_revenue"] == pytest.approx(round(total_charges, 2))
+        assert body["average_monthly_charges"] == pytest.approx(round(avg_charges, 2))
+
+    def test_kpis_is_not_scoped_to_the_customers_page(self, client: "TestClient") -> None:
+        """
+        The KPI population must not be bounded by the /customers page.
+        With more than 100 rows in the table, a summary that equals
+        the default page size is the bug this guards against.
+        """
+        customers = client.get(
+            "/customers", headers={"X-API-Key": TEST_API_KEY}
+        ).json()
+        kpis = client.get("/kpis", headers={"X-API-Key": TEST_API_KEY}).json()
+
+        assert len(customers) <= 100  # pagination still bounds /customers
+        assert kpis["customer_count"] >= len(customers)
+        if kpis["customer_count"] > 100:
+            assert kpis["customer_count"] > len(customers)
 
 
 @pytest.mark.integration

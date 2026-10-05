@@ -2,7 +2,7 @@
 
 **Source of scope:** [`FLAGSHIP_GAP_AUDIT.md`](FLAGSHIP_GAP_AUDIT.md)
 **Plan type:** minimum consolidation needed for the audit's Flagship Definition of Done
-**Implementation status:** plan only; no implementation has been made.
+**Implementation status:** **Phase 1 complete (2026-10-05). Phases 2–5 not started.** See [Phase 1 implementation record](#phase-1-implementation-record) below.
 
 ## Scope and guardrails
 
@@ -65,6 +65,127 @@ FGA-09 (replacing the working Markdown metrics parser with a structured artifact
 ### Rollback/risk considerations
 
 The mentor's pagination implementation is intentional; do not revert it or change its default to “all rows.” If aggregate rounding/null handling differs, compare it with a direct whole-table reference query and adjust the aggregate, not the API contract. Keep the legacy model metrics untouched in this phase.
+
+---
+
+## Phase 1 implementation record
+
+**Completed:** 2026-10-05. **Status: all four Phase 1 acceptance criteria met** (evidence below). Phases 2–5 were not started.
+
+### Pre-implementation verification
+
+The plan was checked against the tree before any edit. All assumptions held:
+
+| Plan assumption | Verified in tree | Result |
+|---|---|---|
+| `kpi_service.get_kpis()` calls `repo.get_all()` with no arguments | `app/services/kpi_service.py:49` | Confirmed — reproduced live: `/kpis` returned `customer_count: 100`, `overall_churn_rate: 100.0` (the first 100 rows of the tracked dataset are all churned) |
+| `CustomerRepository.get_all(page=0, size=100)` is paginated | `app/repository/customer_repository.py` | Confirmed |
+| `scripts/verify_endpoints.sh` carries pre-leakage LightGBM assertions and an incompatible `/kpis` count check | `scripts/verify_endpoints.sh` | Confirmed — executed against a live API: **16 passed / 3 failed** (stale `~0.9304` accuracy, stale `~0.9818` ROC AUC, and `customer_count == 7043`) |
+| `scripts/verify_endpoints.ps1` carries the same shape of staleness plus a stale “LightGBM” header comment | `scripts/verify_endpoints.ps1` | Confirmed by inspection |
+| `docs/qa_findings.md` presents the Issue #19 run as current acceptance evidence | `docs/qa_findings.md` | Confirmed |
+| No test asserts `/kpis` reflects the full dataset | `tests/test_api.py` | Confirmed — the KPI tests only asserted keys and `churn + retention ≈ 100`, which `100.0 + 0.0` satisfies |
+| Baseline suite is green with artifacts present | `pytest` | Confirmed — **87 passed / 0 failed** before any change |
+
+**One assumption needed qualifying.** The plan's Phase 1 test section says to verify the full-dataset KPI result “agrees with direct SQL … the expected customer count and churn rate are 7,043 and 26.54%.” Those values are correct for the tracked dataset, but `evaluation/model_comparison.md` is regenerated on every pipeline/test run, and in this sandbox's unpinned environment the rerun drifts (see “Environment findings” below). The KPI values themselves did **not** drift — they are properties of the data, not of a package version.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `app/repository/customer_repository.py` | **Added `get_kpi_aggregate()`** — one whole-table SQL aggregate returning `customer_count`, `churned_count`, `total_monthly_charges`, `average_monthly_charges`. No existing method, signature or behaviour was modified. |
+| `app/services/kpi_service.py` | `get_kpis()` now reads the aggregate instead of `repo.get_all()`. Response keys, types, two-decimal rounding, empty-table behaviour and null semantics are unchanged; only the source of the numbers changed. Module docstring records the regression and the fix. |
+| `tests/test_kpi_aggregate.py` | **New file, 12 tests.** Whole-table regression coverage on a purpose-built temporary SQLite database with 150 mixed rows (first 100 all churned, mirroring the real failure signature), plus pagination-preservation, empty-table and NULL-charge tests. Runs without `database/churn.db` or `models/best_model.pkl`. |
+| `tests/test_api.py` | Added 4 integration tests to `TestKpisEndpoint`: `/kpis` count, churn/retention rate and charge totals must equal independently computed whole-table SQL, and the KPI population must not be bounded by the `/customers` page. |
+| `scripts/verify_endpoints.sh` | Rewritten against the current contract: 29 checks, `curl`/`jq`/`API_KEY` now hard preflight requirements (exit 2), pre-leakage and Issue #10 placeholder values excluded rather than pinned, pagination and whole-population KPI semantics asserted, `EXPECTED_CUSTOMER_COUNT` (default 7043) configurable, API/report consistency check added, temp file via `mktemp`. **Mode changed 100644 → 100755** (see Deviations). |
+| `scripts/verify_endpoints.ps1` | Mirrors the Bash script's 29 checks and exit codes. Also fixes a latent bug: `Check-Endpoint` hardcoded `$status = 200` on the success path, so any 2xx was reported as the expected 200. |
+| `docs/qa_findings.md` | Issue #19 section is now explicitly labelled a dated historical record (2026-07-29) with a note that commit `806705c` (2026-08-12) later introduced the aggregate regression; the “all 19 checks passed” and “No blocking issues remain” statements are qualified; Finding 16 added to the summary table. Final pass/skip counts deliberately **not** restated. |
+| `README.md` | The “Known KPI regression” limitation bullet now records the repair; the verify-script paragraph no longer describes the scripts as expected-to-fail and documents their exit codes and optional settings. Minimal, surgical edits only — the Phase 5 restructure is untouched. |
+
+### Test results
+
+Run with Python 3.11.2 in a fresh virtualenv from `requirements.txt` (pandas 3.0.6, scikit-learn 1.9.1, fastapi 0.142.2, pydantic 2.13.5, pytest 9.1.1 — unpinned, see below).
+
+| Run | Result |
+|---|---|
+| Full suite, artifacts present (baseline, before changes) | **87 passed / 0 failed** |
+| Full suite, artifacts present (after changes) | **103 passed / 0 failed** (87 + 12 new KPI-aggregate + 4 new API KPI guards) |
+| Per file after changes | `test_api.py` 34, `test_etl.py` 28, `test_kpi_aggregate.py` 12, `test_models.py` 22, `test_sql_views.py` 7 |
+| Markers | `-m unit` → 33 passed; `-m integration` → 70 passed |
+| Full suite, fresh state (DB + model removed) | 34 passed / 69 skipped / **0 failed**. The 12 new KPI-aggregate tests run and pass in this state, which is the point: the regression is catchable on a fresh clone. Fresh-state counts are **not** being published as final; a clean artifact-present run belongs to Phase 4. |
+| `ruff check` (ad-hoc, not added to the repo) | No new findings in `tests/test_kpi_aggregate.py`, `app/services/kpi_service.py`. The 36 findings in the touched files are pre-existing style (`UP037` quoted `"TestClient"` annotations, which are the deliberate `TYPE_CHECKING` pattern documented in QA Finding 15) and repo-wide patterns (64 findings across the tree). Not fixed — out of Phase 1 scope. |
+| `python -m compileall` | Clean |
+
+**Regression proof.** The new tests were run against the *pre-fix* implementation to confirm they actually catch the bug. Result: `tests/test_kpi_aggregate.py` → **3 failed** (`test_kpis_match_independent_whole_table_sql_totals`, `test_kpis_are_not_scoped_to_the_default_page`, `test_get_kpis_never_calls_get_all`); `tests/test_api.py -k Kpis` → **3 failed** (count, churn-rate and totals vs. whole-table SQL). Both files pass with the fix in place.
+
+### End-to-end workflow run
+
+Full clean rebuild of the affected path, from a deleted `database/churn.db`, `models/best_model.pkl` and `evaluation/model_comparison.md`:
+
+```
+python database/init_db.py      → Database initialized from sql/schema.sql
+python etl/load_to_db.py        → Rows inserted: 7043
+python database/init_views.py   → Views initialized from sql/views.sql
+python training/evaluate_models.py → Best model: Logistic Regression, saved
+uvicorn app.main:app            → all 5 endpoints live
+```
+
+Live endpoint results after the rebuild:
+
+| Endpoint | Result |
+|---|---|
+| `GET /health` | `{"status":"ok"}` (no auth) |
+| `GET /customers` (default) | 100 rows — **pagination unchanged** |
+| `GET /customers?page=1&size=5` | 5 rows |
+| `GET /kpis` | `{"customer_count":7043,"overall_churn_rate":26.54,"retention_rate":73.46,"average_monthly_charges":64.76,"total_monthly_revenue":456116.6}` — **matches direct SQL exactly** and matches `docs/api_examples.md` |
+| `GET /model-metrics` | 200, four locked keys |
+| `POST /predict` | 200 on a valid payload; 422 on malformed input |
+| auth | 401 on all four protected endpoints without a key |
+
+`./scripts/verify_endpoints.sh` against that live API: **29 passed / 0 failed / 0 skipped, exit 0**.
+
+Failure paths were exercised explicitly:
+
+| Scenario | Result |
+|---|---|
+| `EXPECTED_CUSTOMER_COUNT=999` | 1 FAIL, **exit 1** |
+| `API_KEY` unset | clear message, **exit 2** |
+| `EXPECTED_CUSTOMER_COUNT=abc` | clear message, **exit 2** |
+| `jq` not on `PATH` | clear message, **exit 2** (previously: silent SKIP and a misleading green run) |
+
+**Not executed:** `scripts/verify_endpoints.ps1`. No PowerShell runtime exists in this environment (`pwsh`/`powershell` absent). The script was written to mirror the Bash checks one-for-one and was syntax-checked for balanced blocks, but it has **not** been run and is not claimed as executed. It needs a Windows/PowerShell machine before Phase 4 can treat it as verified.
+
+### Deviations from plan
+
+1. **`README.md` was edited (not in Phase 1's listed files).** The Phase 1 file list covers code, tests, scripts and `docs/qa_findings.md`. Leaving the README's “Known KPI regression … `/kpis` therefore summarizes the first 100 rows” bullet and its “the endpoint scripts … are not expected to pass as acceptance checks” paragraph in place would have created a *new* contradiction between the docs and the fixed code. Only those two passages were changed; the Phase 5 restructure was not started.
+2. **`scripts/verify_endpoints.sh` mode changed 100644 → 100755.** The README documents `./scripts/verify_endpoints.sh`, and the file was committed without the executable bit (a “Permission denied” on a fresh clone). The bit is required for the Phase 1 acceptance criterion that the script be runnable and fail nonzero. No `.ps1` equivalent exists (PowerShell does not use the exec bit).
+3. **The `/kpis` aggregate lives in the repository, not in a new SQL view.** `kpi_service.py`'s own docstring recommends a `view_executive_kpis` view. A new view in `sql/views.sql` (Salome's Issue #9 deliverable) would also require a database rebuild for existing checkouts and would add a `test_sql_views.py` surface. The aggregate already sits at the repository boundary the service depends on, which is the smallest change that makes the endpoint correct. Recorded here rather than deferred silently.
+4. **The smoke scripts no longer pin exact `/model-metrics` values.** The plan said to remove the leakage-era constants and not “pin the new model result to stale constants,” so both scripts assert keys, `[0,1]` ranges, and the *absence* of the two known-invalid result sets (Issue #10's `{0.89, 0.86, 0.81, 0.91}` and the pre-leakage LightGBM `~0.9304` / `~0.9818`). One new check compares the endpoint against `evaluation/model_comparison.md` instead of a literal, so the scripts stay valid under dependency drift.
+5. **`EXPECTED_CUSTOMER_COUNT` is configurable with a default of 7043.** The original script hardcoded `7043`. The default keeps the original intent for the tracked dataset; the override (or `0` to skip) makes the script usable against any database instead of failing for an unrelated reason.
+6. **`scripts/verify_endpoints.ps1` no longer defaults `API_KEY` to `local-dev-key-123`.** It now requires the variable, matching the Bash script. This is a script behaviour change made so that both maintained scripts assert the same semantics.
+7. **`Check-Endpoint` in the `.ps1` no longer hardcodes `$status = 200`.** Any 2xx was previously reported as the expected 200, so the script could not actually assert a status code. Needed for “exit nonzero on a failed assertion” to mean anything.
+
+### Newly discovered problems (backlog — not fixed in Phase 1)
+
+These were found while implementing Phase 1. None blocks this phase, so none was fixed.
+
+| ID | Problem | Where | Suggested phase |
+|---|---|---|---|
+| NEW-01 | **Unpinned dependencies move the metrics.** A clean rerun in this environment produced Logistic Regression accuracy 0.7991 / ROC AUC 0.8496 (vs. the committed 0.801987 / 0.849448) and XGBoost 0.784244 / 0.831920 (vs. 0.790632 / 0.828214). Decision Tree, Random Forest and LightGBM were identical. This is the drift the audit already records; it is now re-measured here. Environment: Python 3.11.2, pandas 3.0.6, numpy 2.4.6, scikit-learn 1.9.1, xgboost 3.2.0, lightgbm 4.7.0 — while `README.md` documents Python 3.12. | `requirements.txt`, `README.md` | **Phase 2** (FGA-03) |
+| NEW-02 | **`evaluation/model_comparison.md` is rewritten by the test suite.** `tests/test_models.py`'s end-to-end retraining tests call `evaluate_all_models()`, which overwrites the tracked report. So `pytest` alone changes a tracked metrics file. The committed file was restored after every run in this phase; a reviewer running `pytest` will see the same drift appear. | `tests/test_models.py`, `training/evaluate_models.py` | **Phase 2** — needs a decision (pin deps, or write retraining output to a temp path) |
+| NEW-03 | **The served model can disagree with the report it is judged by.** `/model-metrics` parses `evaluation/model_comparison.md`, while `/predict` serves `models/best_model.pkl`. After a drifted retrain the pickle scores 0.7991 while the report can still say 0.8020. Nothing asserts the two agree. | `app/services/metrics_service.py` | **Phase 2/3**; also relevant to FGA-09 |
+| NEW-04 | **`docs/api_examples.md`'s `/customers` example is still wrong** (`senior_citizen: 0` and `tenure` — the real response has `"Yes"/"No"` TEXT and `tenure_months`). Pre-existing, documented in the evidence; not touched here. | `docs/api_examples.md` | **Phase 5** (FGA-08) |
+| NEW-05 | **`docs/api_examples.md`'s `/model-metrics` example values are stale** (`0.84 / 0.79 / 0.73 / 0.88`), and its `/kpis` example happens to match the now-correct output. Both need regenerating against real output. | `docs/api_examples.md` | **Phase 5** |
+| NEW-06 | **`scripts/verify_endpoints.ps1` has never been executed in this environment.** No PowerShell runtime is available. It is written but unverified. | `scripts/verify_endpoints.ps1` | **Phase 4** |
+| NEW-07 | `pytest.ini` ends without a trailing newline after `ignore::UserWarning`, so the last filter line and the next file's content are adjacent. Cosmetic, no behavioural effect. | `pytest.ini` | Optional |
+| NEW-08 | `B905` (`zip()` without `strict=`) in `_row_to_dict` and 64 other advisory `ruff` findings across the tree. No linter is configured for this repo, so nothing enforces or surfaces them. | repo-wide | Optional; not Phase 1 |
+
+### Environment findings (recorded, not acted on)
+
+- Python 3.11.2 was the only interpreter available; `README.md` documents Python 3.12. Phase 2 must pick one and state it.
+- `requirements.txt` pins nothing. A fresh `pip install -r requirements.txt` resolved to the versions listed under NEW-01.
+- No `.env` file exists in the checkout; `predict.py`'s `load_dotenv()` is a no-op, which is fine for the runs above.
+- All numbers above were produced in this sandbox. Nothing here should be read as a claim about the original team repository.
+
 
 ---
 

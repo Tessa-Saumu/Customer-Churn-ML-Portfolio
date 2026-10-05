@@ -80,3 +80,60 @@ class CustomerRepository:
             return _row_to_dict(cursor, row)
         finally:
             connection.close()
+
+    def get_kpi_aggregate(self) -> dict[str, Any]:
+        """
+        Single-row SQL aggregate over the WHOLE customers table, for
+        population-level summaries such as app/services/kpi_service.py.
+
+        Why this exists (Phase 1 / audit item FGA-01): /kpis used to be
+        computed by calling get_all(), which returns one *page* of
+        customers (default size 100, mentor-added pagination). The KPI
+        service therefore summarized the first 100 rows and reported
+        them as the whole population -- on the tracked dataset that
+        produced customer_count=100 and a 100% churn rate.
+
+        This keeps the population math in the database so a summary
+        never has to materialize customer rows, and so it stays correct
+        as the table grows. It does NOT change get_all(): /customers
+        remains paginated by default, which is intentional.
+
+        Returned keys (raw, unrounded -- rounding is the caller's
+        presentation decision):
+            customer_count          COUNT(*) over the whole table
+            churned_count           rows with churn_label = 'Yes'
+            total_monthly_charges   SUM(monthly_charges); NULL charges
+                                   contribute 0, matching the previous
+                                   Python `float(x or 0.0)` handling
+            average_monthly_charges SUM(monthly_charges) / COUNT(*) --
+                                   deliberately NOT SQL AVG(), because
+                                   AVG() would divide by the number of
+                                   NON-NULL charges and silently change
+                                   the previous semantics
+
+        churn is counted on churn_label (not churn_value) to preserve
+        the exact behaviour the service had before this method existed.
+        """
+        connection = get_connection()
+        try:
+            cursor = connection.execute(
+                """
+                SELECT
+                    COUNT(*) AS customer_count,
+                    COALESCE(
+                        SUM(CASE WHEN churn_label = 'Yes' THEN 1 ELSE 0 END), 0
+                    ) AS churned_count,
+                    COALESCE(SUM(monthly_charges), 0.0) AS total_monthly_charges,
+                    COALESCE(SUM(monthly_charges), 0.0) / COUNT(*)
+                        AS average_monthly_charges
+                FROM customers
+                """
+            )
+            row = cursor.fetchone()
+            result = _row_to_dict(cursor, row)
+            logger.info(
+                "get_kpi_aggregate over the whole customers table: %s", result
+            )
+            return result
+        finally:
+            connection.close()
