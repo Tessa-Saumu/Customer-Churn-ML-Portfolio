@@ -434,6 +434,38 @@ whether the running environment resolves pandas 2.x or 3.x.
 
 ## Issue #19 — Full Regression Pass
 
+> **STATUS: HISTORICAL RECORD — superseded in part. Do not read this
+> section as a statement about the current tree.**
+>
+> The run described below was performed on **2026-07-29**, after Issues
+> #13/#14/#16/#17 were merged. On **2026-08-12** the mentor's stretch
+> commit `806705c` added pagination to
+> `CustomerRepository.get_all()` (default page size 100) without
+> re-running these checks. `kpi_service.get_kpis()` had been computing
+> the executive KPIs from `get_all()` with no arguments, so from that
+> commit onward `/kpis` summarized **only the first 100 rows** and
+> presented them as the whole population — on the tracked dataset it
+> returned `customer_count: 100` and `overall_churn_rate: 100.0`. No
+> test caught it: the KPI tests asserted the response keys and that
+> churn + retention sums to ~100, a check that `100.0 + 0.0` satisfies
+> trivially. Both endpoint verification scripts therefore also failed
+> from that date (16 passed / 3 failed for `verify_endpoints.sh` as
+> measured on 2026-10-05).
+>
+> **This is an aggregate-path regression introduced after the pass
+> below, not a defect in the pass itself.** It was found during the
+> post-sprint gap audit and repaired in Phase 1 (audit item FGA-01,
+> 2026-10-05): `/kpis` now reads a single whole-table SQL aggregate
+> (`CustomerRepository.get_kpi_aggregate()`), `/customers` keeps its
+> paginated default, and `tests/test_kpi_aggregate.py` plus new
+> `/kpis` population guards in `tests/test_api.py` fail loudly if the
+> service ever reads only a page again. The verification scripts were
+> rewritten to assert the current contract (FGA-02).
+>
+> **Pass/skip counts are deliberately not restated here.** A clean,
+> artifact-present re-run is part of Phase 4; until that run exists,
+> the counts below are a dated historical result only.
+
 **Scope note:** this section covers the full-system regression pass
 performed after Issues #13, #14, #16, and #17 were all merged, owned
 by Theresia. Issue #19's own mandate explicitly authorizes editing
@@ -692,8 +724,17 @@ skip-guard's required files are in place.
 | 13 | `database/init_views.py` (Mercy) — no idempotency test coverage | Low (function itself confirmed safe; coverage gap only) | **Fixed** — `TestViewsIdempotency` added |
 | 14 | `training/` (Latifah) — 3 functions with untyped params (`evaluate_models.py`, `train_models.py`, `train_test_split.py`) | Low (no behavioral impact; inconsistent with project's own typing convention) | Documented with exact fix; **fixed in Issue #20** (final integration/cleanup, Theresia) |
 | 15 | `tests/test_api.py` (Theresia, this sprint) — `client` fixture lacked return annotation (cascaded to 30 call sites) | Low (no behavioral impact; single root cause) | **Fixed** — fixture and all 30 call sites annotated, verified live |
+| 16 | `app/services/kpi_service.py` — `/kpis` computed over `get_all()`'s first page after pagination was added (`806705c`, 2026-08-12) | **High** — a live endpoint reported a 100-row page as the whole population (`customer_count: 100`, `overall_churn_rate: 100.0`) | **Fixed in Phase 1** (2026-10-05, audit item FGA-01) — single whole-table SQL aggregate at the repository boundary; `/customers` pagination deliberately untouched; new `tests/test_kpi_aggregate.py` plus `/kpis` population guards in `tests/test_api.py` |
 
-No blocking issues remain. Findings 1-11 are unchanged from the
+**On the table above:** rows 1–15 are the record as it stood at the
+end of Issue #19 (2026-07-29). Row 16 records a regression that
+entered `main` afterwards and was repaired post-sprint. The closing
+statement of this table used to read "No blocking issues remain";
+that was true of the tree as tested on 2026-07-29 and is **not** a
+claim about the tree that shipped on 2026-08-12, nor about the tree
+before the Phase 1 repair.
+
+Findings 1-11 are unchanged from the
 original three test-authoring issues. Findings 12, 13, and 15
 (test-suite gaps discovered during the Issue #19 full regression
 pass) were fixed directly as part of this pass, under Issue #19's
@@ -714,7 +755,9 @@ default` and remain accurate as documented, but a plain `pytest` run
 alone will not reveal them going forward — expected, not a
 regression.
 >
-**Full regression pass (Issue #19) — final status:**
+**Full regression pass (Issue #19) — final status AS AT 2026-07-29
+(historical; see the status note at the top of this section for what
+changed afterwards):**
 - **Total tests executed:** 87 (fresh-clone run, full pipeline
   applied) — 21 passed / 60 skipped / 6 failed before this pass's
   fixes; 87 passed / 0 failed / 0 skipped after running the full
@@ -726,10 +769,17 @@ regression.
   exist, so it runs and passes once `init_db.py` alone has been run,
   ahead of the other 6).
 - **API endpoint verification:** all 19 checks in
-  `scripts/verify_endpoints.ps1` passed (health, auth on all 4
-  protected endpoints, real-data checks against Issue #10's retired
-  mocks/placeholders, and 422 validation).
-- **Manual end-to-end walkthrough:** completed in full — CSV load →
+  `scripts/verify_endpoints.ps1` passed **at that date** (health,
+  auth on all 4 protected endpoints, real-data checks against Issue
+  #10's retired mocks/placeholders, and 422 validation). The scripts
+  then drifted: `verify_endpoints.sh` still asserted the
+  pre-leakage LightGBM figures, and both scripts asserted a
+  whole-table `customer_count` that the paginated `/kpis` no longer
+  returned. Both were rewritten in Phase 1 (FGA-02) and now assert
+  29 checks against the current contract; they have not yet been
+  re-run as a pair on a PowerShell-capable machine.
+- **Manual end-to-end walkthrough:** completed in full at that date
+  — CSV load →
   ETL → DB population (7,043 rows) → model training (5 models,
   Logistic Regression selected as best) → API startup → all 5
   endpoints verified live → Power BI dashboard connects via ODBC and
@@ -745,6 +795,10 @@ regression.
   definitions with no runtime logic to log, and `app/main.py`'s
   `logging` import is solely for `basicConfig()` root-handler setup
   rather than emitting messages itself — none of these are gaps.
-- **Remaining issues:** none blocking. Finding 14 (Low severity,
-  documented above with an exact fix) is the only open item,
-  assigned to Issue #20 for final resolution.
+- **Remaining issues as recorded then:** none blocking. Finding 14
+  (Low severity, documented above with an exact fix) was the only
+  open item, assigned to Issue #20 for final resolution. That "none
+  blocking" statement is **no longer accurate as a description of the
+  shipped tree**: the `/kpis` aggregate regression described at the
+  top of this section was live in `main` from 2026-08-12 until the
+  Phase 1 repair.

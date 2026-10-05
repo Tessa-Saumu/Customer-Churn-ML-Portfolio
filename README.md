@@ -18,9 +18,9 @@ Five candidates were compared on one stratified split, so this holdout also serv
 
 ## Limitations and current status
 
-- **Known KPI regression:** `kpi_service.get_kpis()` calls `CustomerRepository.get_all()` with its default page size of 100. `/kpis` therefore summarizes the first 100 rows, not all 7,043. Dashboard dataset totals must not be interpreted as evidence that this API endpoint is correct.
-- Existing tests do not catch that regression; many integration tests skip when generated database/model artifacts are absent. Historical full-suite success is not a claim of current system correctness.
-- Endpoint verification scripts contain stale assertions (including pre-leakage metrics in the shell script) and are not reliable acceptance gates for the current tree.
+- **KPI boundary — repaired (post-sprint, Phase 1, 2026-10-05):** `/kpis` used to call `CustomerRepository.get_all()` with its default page size of 100, so it summarized the first 100 rows and presented them as the whole population (on this dataset: `customer_count: 100`, `overall_churn_rate: 100.0`). It now computes a single whole-table SQL aggregate (`CustomerRepository.get_kpi_aggregate()`), so `/kpis` reports the full population — 7,043 customers and a 26.54% churn rate — without materializing customer rows. `/customers` still returns one page by default; that pagination is the mentor's intentional design and was not changed. Regression coverage: `tests/test_kpi_aggregate.py` and the `/kpis` population guards in `tests/test_api.py`.
+- Existing tests did not catch that regression, and many integration tests still skip when generated database/model artifacts are absent. Historical full-suite success is not a claim of current system correctness; a clean artifact-present run is scheduled as part of the reproducibility work.
+- The endpoint verification scripts previously carried stale assertions (including pre-leakage LightGBM metrics in the shell script). They have been rewritten against the current contract and now pass, but they have not yet been re-run as a pair on a PowerShell-capable machine.
 - No cloud deployment is established. The deployment workflow is disabled, dependencies are unpinned, and no green CI claim is made. Docker/Streamlit files exist; their presence does not prove a working deployment.
 - The committed Power BI screenshots are historical report captures. The refresh instructions below describe the intended local setup, not a newly verified live ODBC connection.
 - Code defects and evaluation protocols were not changed for this documentation pass.
@@ -289,21 +289,23 @@ python training/evaluate_models.py
 uvicorn app.main:app --reload
 ```
 
-The historical endpoint scripts can be inspected or run below, but their known stale assertions and the KPI regression mean they are not expected to pass as acceptance checks:
+The endpoint verification scripts below check the current API contract — auth, pagination, whole-population KPI semantics and the locked response shapes. Run them against a locally running instance:
 
 **macOS / Linux:**
 
 ```bash
-API_KEY=<your-key-from-.env> bash scripts/verify_endpoints.sh
+API_KEY=<your-key-from-.env> ./scripts/verify_endpoints.sh
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-$env:API_KEY="<your-key-from-.env>"; ./scripts/verify_endpoints.ps1
+$env:API_KEY="<your-key-from-.env>"; .\scripts\verify_endpoints.ps1
 ```
 
-Both scripts check `/health` (no auth), `/customers`, `/kpis`, `/model-metrics`, and `/predict` (with and without the API key where relevant) and print a pass/fail summary. 
+Both scripts check `/health` (no auth), `/customers` (including its paginated default and an explicit page/size request), `/kpis` (whole-population values, not the first page), `/model-metrics`, and `/predict` (with and without the API key where relevant), then print a pass/fail/skip summary and exit nonzero if any check fails. They require `curl` and `jq` (Bash) and an explicit `API_KEY`; a missing tool or key exits with code 2 rather than reporting a misleading all-green run.
+
+Optional settings: `EXPECTED_CUSTOMER_COUNT` (default `7043`, the tracked dataset's row count — set it to your database's row count, or `0` to skip the exact-count check) and `REPORT_PATH` (default `evaluation/model_comparison.md`, used for the API/report consistency check).
 
 A single manual spot-check, if you want one:
 

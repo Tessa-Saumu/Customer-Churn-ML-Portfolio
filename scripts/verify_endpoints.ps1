@@ -19,39 +19,84 @@
 #   3. In another terminal:
 #        .\verify_endpoints.ps1
 #
-# Requires a .env file to be set up with a valid API_KEY.
-# If the API_KEY environment variable is not already set, this script
-# defaults to "local-dev-key-123". Update the default below or set the
-# environment variable before running if your application uses a different key.
+# Requires the API_KEY environment variable to be set to the same key
+# the API is running with (matching your .env file). Unlike the
+# previous version of this script there is no silent default key: an
+# unset API_KEY now fails immediately rather than producing a run
+# whose results cannot be trusted.
 #
 # Optional environment variables:
-#   API_KEY   - API key to send in the X-API-Key header.
-#   BASE_URL  - Base URL of the running API (default: http://localhost:8000).
+#   API_KEY                 - API key to send in the X-API-Key header. REQUIRED.
+#   BASE_URL                - Base URL of the running API (default: http://localhost:8000).
+#   EXPECTED_CUSTOMER_COUNT - Customer row count in the database the API is
+#                             serving (default: 7043, the tracked Telco
+#                             dataset). Set to 0 to skip the exact-count check.
+#   REPORT_PATH             - Path to evaluation/model_comparison.md, used for
+#                             the report/metrics consistency check
+#                             (default: evaluation/model_comparison.md).
 #
-# This script verifies:
-#   - GET  /health                 -> 200 (no authentication)
-#   - GET  /customers              -> 401 without API key
-#   - GET  /customers              -> 200 with API key, real schema fields
-#   - GET  /kpis                   -> 401 without API key
-#   - GET  /kpis                   -> 200 with API key, internally consistent
-#   - GET  /model-metrics          -> 200 with API key, matches real LightGBM results
-#   - POST /predict                -> 401 without API key
-#   - POST /predict                -> 200 with API key, real model output (not fixed 0.42)
-#   - POST /predict                -> 422 on malformed input
+# PHASE 1 (audit item FGA-02, 2026-10-05) -- what changed and why
+# --------------------------------------------------------------
+# This script had drifted out of sync with the shipped app and could
+# not be used as an acceptance gate:
+#   * It still pinned the Logistic Regression numbers
+#     (accuracy ~0.8020 / ROC AUC ~0.8494) as if they were contract,
+#     even though unpinned dependencies move them between
+#     environments, and its header comment still described the
+#     selected model as LightGBM.
+#   * Its /kpis customer_count check asserted the full-table row count
+#     while /kpis was summarizing only the first 100 rows (FGA-01), so
+#     it failed for a real reason the script could not explain.
+#   * Check-Endpoint treated any 2xx response as 200, so it could not
+#     actually assert a status code.
 #
-# Exit code:
-#   0 = All endpoint checks passed.
+# It now asserts the same semantics as scripts/verify_endpoints.sh:
+# response keys, value ranges, pagination behaviour, whole-population
+# KPI semantics, and the absence of the two known-invalid result sets
+# (Issue #10's placeholder and the pre-leakage LightGBM run). Exact
+# model numbers are deliberately not pinned.
+#
+# Exit codes:
+#   0 = All endpoint checks passed (skips, if any, are reported).
 #   1 = One or more endpoint checks failed.
+#   2 = The script could not run (missing API_KEY, bad
+#       EXPECTED_CUSTOMER_COUNT, or no server reachable).
 
-$API_KEY = if ($env:API_KEY) { $env:API_KEY } else { "local-dev-key-123" }
+$ErrorActionPreference = "Stop"
+
+$API_KEY = $env:API_KEY
 $BASE_URL = if ($env:BASE_URL) { $env:BASE_URL } else { "http://localhost:8000" }
-
-$headers = @{
-    "X-API-Key" = $API_KEY
-}
+$EXPECTED_CUSTOMER_COUNT = if ($env:EXPECTED_CUSTOMER_COUNT) { $env:EXPECTED_CUSTOMER_COUNT } else { "7043" }
+$REPORT_PATH = if ($env:REPORT_PATH) { $env:REPORT_PATH } else { "evaluation/model_comparison.md" }
 
 $pass = 0
 $fail = 0
+$skip = 0
+
+# ---------------------------------------------------------------------
+# Preflight: fail loudly rather than reporting a partial run as green.
+# ---------------------------------------------------------------------
+
+if ([string]::IsNullOrWhiteSpace($API_KEY)) {
+    Write-Host "ERROR: API_KEY is not set."
+    Write-Host "       Set it to the key the API is running with, e.g."
+    Write-Host "       `$env:API_KEY='local-dev-key-123'; .\verify_endpoints.ps1"
+    exit 2
+}
+
+if ($EXPECTED_CUSTOMER_COUNT -notmatch '^\d+$') {
+    Write-Host "ERROR: EXPECTED_CUSTOMER_COUNT must be a non-negative integer."
+    Write-Host "       Got: '$EXPECTED_CUSTOMER_COUNT'"
+    Write-Host "       Set it to your database's customer row count, or 0 to skip"
+    Write-Host "       the exact-count check."
+    exit 2
+}
+
+function Skip-Check {
+    param([string]$Description)
+    Write-Host "SKIP $Description" -ForegroundColor Yellow
+    $script:skip++
+}
 
 function Check-Endpoint {
     param(
@@ -84,7 +129,10 @@ function Check-Endpoint {
                 -Headers $Headers
         }
 
-        $status = 200
+        # FGA-02: assert the ACTUAL status code. The previous version
+        # hardcoded 200 on the success path, which meant any 2xx
+        # (201, 204, ...) was reported as the expected 200.
+        $status = [int]$response.StatusCode
         $script:lastResponseContent = $response.Content | ConvertFrom-Json
     }
     catch {
@@ -92,7 +140,8 @@ function Check-Endpoint {
             $status = [int]$_.Exception.Response.StatusCode
         }
         else {
-            Write-Host "FAIL [No Response] $Description"
+            Write-Host "FAIL [No Response] $Description" -ForegroundColor Red
+            Write-Host "      Is the API running at $Uri ?"
             $script:fail++
             return
         }
@@ -141,10 +190,22 @@ function Check-Content {
 Write-Host "Verifying against $BASE_URL"
 Write-Host "----------------------------------------"
 
+# Fail fast (exit 2) if nothing is listening, instead of reporting a
+# pile of connection failures as endpoint regressions.
 Check-Endpoint `
     -Description "GET /health" `
     -Uri "$BASE_URL/health" `
     -ExpectedStatus 200
+
+if ($fail -gt 0) {
+    Write-Host "ERROR: could not reach the API at $BASE_URL."
+    Write-Host "       Start it with: uvicorn app.main:app --reload"
+    exit 2
+}
+
+$headers = @{
+    "X-API-Key" = $API_KEY
+}
 
 Check-Endpoint `
     -Description "GET /customers without API key" `
@@ -153,7 +214,6 @@ Check-Endpoint `
 
 Check-Endpoint `
     -Description "GET /customers with API key" `
-    -Uri "$BASE_URL/customers" `
     -Headers $headers `
     -ExpectedStatus 200
 
@@ -168,6 +228,25 @@ Check-Content `
     -Description "GET /customers row count is not the Issue #10 mock's fixed 2 records" `
     -Condition { param($c) $c.Count -ne 2 }
 
+# Mentor-added pagination (commit 806705c) is intentional and must stay:
+# the default /customers response is bounded to one page.
+Check-Content `
+    -Description "GET /customers default response stays within one page (<= 100 rows)" `
+    -Condition { param($c) $c.Count -le 100 }
+
+$defaultPageLength = @($script:lastResponseContent).Count
+
+# Explicit page/size requests keep their existing behaviour.
+Check-Endpoint `
+    -Description "GET /customers?page=1&size=5 with API key" `
+    -Headers $headers `
+    -Uri "$BASE_URL/customers?page=1&size=5" `
+    -ExpectedStatus 200
+
+Check-Content `
+    -Description "GET /customers honours the requested page size (<= 5 rows)" `
+    -Condition { param($c) $c.Count -le 5 }
+
 Check-Endpoint `
     -Description "GET /kpis without API key" `
     -Uri "$BASE_URL/kpis" `
@@ -175,31 +254,97 @@ Check-Endpoint `
 
 Check-Endpoint `
     -Description "GET /kpis with API key" `
-    -Uri "$BASE_URL/kpis" `
     -Headers $headers `
     -ExpectedStatus 200
 
-# Issue #14: /kpis must be computed from real data. Your real database
-# also happens to load 7043 rows (per your ETL run), so that specific
-# number is checked directly below AND we check internal consistency,
-# which the old fixed mock dict never had to satisfy by construction.
+# FGA-01: /kpis is a whole-population summary. Issue #10's mock always
+# returned exactly customer_count: 7043, and the real database also
+# loads 7043 rows, so that number is no longer a reliable "is it real"
+# signal on its own. What is checked here is the SEMANTICS: the five
+# locked keys, internally consistent rates, and a population that is
+# not the /customers page.
+Check-Content `
+    -Description "GET /kpis has exactly the five locked response keys" `
+    -Condition {
+        param($k)
+        $keys = $k.PSObject.Properties.Name | Sort-Object
+        ($keys -join ",") -eq "average_monthly_charges,customer_count,overall_churn_rate,retention_rate,total_monthly_revenue"
+    }
+
 Check-Content `
     -Description "GET /kpis: overall_churn_rate + retention_rate ~= 100" `
     -Condition { param($k) [math]::Abs(($k.overall_churn_rate + $k.retention_rate) - 100) -lt 0.1 }
 
 Check-Content `
-    -Description "GET /kpis: customer_count matches real row count (7043 per your ETL run)" `
-    -Condition { param($k) $k.customer_count -eq 7043 }
+    -Description "GET /kpis: rates are percentages within [0, 100]" `
+    -Condition {
+        param($k)
+        ($k.overall_churn_rate -ge 0) -and ($k.overall_churn_rate -le 100) -and
+        ($k.retention_rate -ge 0) -and ($k.retention_rate -le 100)
+    }
+
+Check-Content `
+    -Description "GET /kpis: customer_count is a positive integer and charges are non-negative" `
+    -Condition {
+        param($k)
+        ($k.customer_count -gt 0) -and ($k.average_monthly_charges -ge 0) -and ($k.total_monthly_revenue -ge 0)
+    }
+
+# The core FGA-01 regression check. /kpis used to call the paginated
+# get_all(), so it summarized the first 100 rows and reported them as
+# the whole population (on the tracked dataset: customer_count 100,
+# overall_churn_rate 100.0).
+if ([int]$EXPECTED_CUSTOMER_COUNT -gt 0) {
+    Check-Content `
+        -Description "GET /kpis: customer_count is the full table ($EXPECTED_CUSTOMER_COUNT rows), not the 100-row default page" `
+        -Condition { param($k) $k.customer_count -eq [int]$EXPECTED_CUSTOMER_COUNT }
+}
+else {
+    Skip-Check "exact /kpis customer_count check (EXPECTED_CUSTOMER_COUNT=0)"
+}
+
+# Same regression, without any configuration: when the default
+# /customers page came back full there is more than one page in the
+# table, so the KPI population must be strictly larger than that page.
+if ($defaultPageLength -eq 100) {
+    Check-Content `
+        -Description "GET /kpis: customer_count is larger than a full /customers default page" `
+        -Condition { param($k) $k.customer_count -gt 100 }
+}
+else {
+    Skip-Check "/kpis vs. full-page cross-check (default page returned $defaultPageLength rows, not 100)"
+}
 
 Check-Endpoint `
     -Description "GET /model-metrics with API key" `
-    -Uri "$BASE_URL/model-metrics" `
     -Headers $headers `
     -ExpectedStatus 200
 
 # Issue #14: /model-metrics must be real values parsed from
-# evaluation/model_comparison.md's Selected Model (LightGBM) block,
-# not Issue #10's fixed placeholder {0.89, 0.86, 0.81, 0.91}.
+# evaluation/model_comparison.md's Selected Model block, not Issue
+# #10's fixed placeholder {0.89, 0.86, 0.81, 0.91}. Exact numbers are
+# deliberately NOT pinned here -- unpinned dependencies move them
+# between environments (measured drift: Logistic Regression ROC AUC
+# 0.8494 -> 0.8496). What is asserted is the contract, the value
+# ranges, and the absence of the two known-invalid result sets.
+Check-Content `
+    -Description "GET /model-metrics has exactly the four locked keys" `
+    -Condition {
+        param($m)
+        $keys = $m.PSObject.Properties.Name | Sort-Object
+        ($keys -join ",") -eq "accuracy,precision,recall,roc_auc"
+    }
+
+Check-Content `
+    -Description "GET /model-metrics values are all within [0, 1]" `
+    -Condition {
+        param($m)
+        ($m.accuracy -ge 0) -and ($m.accuracy -le 1) -and
+        ($m.precision -ge 0) -and ($m.precision -le 1) -and
+        ($m.recall -ge 0) -and ($m.recall -le 1) -and
+        ($m.roc_auc -ge 0) -and ($m.roc_auc -le 1)
+    }
+
 Check-Content `
     -Description "GET /model-metrics does not match the Issue #10 placeholder values" `
     -Condition {
@@ -212,13 +357,37 @@ Check-Content `
         )
     }
 
+# The pre-leakage run (commit 6dc54cb, 2026-07-22) trained with
+# churn_score still in the feature set and reported LightGBM accuracy
+# ~0.9304 / ROC AUC ~0.9818. Those figures are target leakage and must
+# never reappear.
 Check-Content `
-    -Description "GET /model-metrics accuracy matches real Logistic Regression result (~0.8020)" `
-    -Condition { param($m) ($m.accuracy -gt 0.801) -and ($m.accuracy -lt 0.803) }
+    -Description "GET /model-metrics accuracy is not the pre-leakage LightGBM result (~0.9304)" `
+    -Condition { param($m) -not (($m.accuracy -gt 0.929) -and ($m.accuracy -lt 0.932)) }
 
 Check-Content `
-    -Description "GET /model-metrics roc_auc matches real Logistic Regression result (~0.8494)" `
-    -Condition { param($m) ($m.roc_auc -gt 0.849) -and ($m.roc_auc -lt 0.850) }
+    -Description "GET /model-metrics roc_auc is not the pre-leakage LightGBM result (~0.9818)" `
+    -Condition { param($m) -not (($m.roc_auc -gt 0.981) -and ($m.roc_auc -lt 0.983)) }
+
+# The endpoint must stay consistent with the report it parses.
+if (Test-Path $REPORT_PATH) {
+    $reportText = Get-Content -Path $REPORT_PATH -Raw
+    $accuracyMatch = [regex]::Match($reportText, '(?m)^-\s*Accuracy:\s*([0-9.]+)')
+    $rocAucMatch = [regex]::Match($reportText, '(?m)^-\s*ROC AUC:\s*([0-9.]+)')
+    if ($accuracyMatch.Success -and $rocAucMatch.Success) {
+        $reportAccuracy = [double]$accuracyMatch.Groups[1].Value
+        $reportRocAuc = [double]$rocAucMatch.Groups[1].Value
+        Check-Content `
+            -Description "GET /model-metrics agrees with the selected model in $REPORT_PATH" `
+            -Condition { param($m) ([double]$m.accuracy -eq $reportAccuracy) -and ([double]$m.roc_auc -eq $reportRocAuc) }
+    }
+    else {
+        Skip-Check "report/metrics consistency check ($REPORT_PATH has no parseable selected-model block)"
+    }
+}
+else {
+    Skip-Check "report/metrics consistency check ($REPORT_PATH not found)"
+}
 
 Check-Endpoint `
     -Description "POST /predict without API key" `
@@ -292,8 +461,12 @@ Check-Endpoint `
     -ExpectedStatus 422
 
 Write-Host "----------------------------------------"
-Write-Host "Results: $pass passed, $fail failed"
+Write-Host "Results: $pass passed, $fail failed, $skip skipped"
 
 if ($fail -gt 0) {
     exit 1
+}
+
+if ($skip -gt 0) {
+    Write-Host "NOTE: $skip check(s) were skipped. A run with skips is not a full pass."
 }
