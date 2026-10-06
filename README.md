@@ -12,11 +12,19 @@ ETL, model training, API scaffolding, SQL analysis and dashboard work had other 
 
 ## Evaluation and key finding
 
-Integration exposed an outcome-derived `churn_score` feature unavailable in real prediction requests. It was removed from model inputs and the comparison was rerun. The [committed comparison](evaluation/model_comparison.md) selects logistic regression with ROC AUC **0.8494**, accuracy **0.8020**, precision **0.6480** and recall **0.5561**. Earlier leakage-affected figures are not valid predictive-performance evidence.
+Integration exposed an outcome-derived `churn_score` feature unavailable in real prediction requests. It was removed from model inputs and the comparison was rerun. Earlier leakage-affected figures are not valid predictive-performance evidence.
 
-Five candidates were compared on one stratified split, so this holdout also served model selection; it is not an untouched final evaluation. No temporal/geographic generalization, causal impact or production use is established.
+The [current comparison](evaluation/model_comparison.md) uses the Phase 3 protocol (2026-10-06): the five candidates and a `DummyClassifier` prior baseline are scored with 5-fold stratified cross-validation on the 80% **training** portion only, the winner is frozen and refitted, and only then are the winner and the baseline evaluated once on the untouched 20% holdout. Results:
 
-Those published numbers are the **legacy single-split result**, archived and labelled in [`evaluation/legacy/`](evaluation/legacy/). Re-running the *same* protocol in the pinned Python 3.11 environment selected the same model at accuracy **0.7991** / ROC AUC **0.8496** (XGBoost also moved; the other three candidates are bit-identical). That rerun is **recorded, not substituted** — see [`evaluation/reproduction/2026-10-05-pinned-single-split/`](evaluation/reproduction/2026-10-05-pinned-single-split/) and [`docs/reproduction_record.md`](docs/reproduction_record.md). A fair-baseline / cross-validated protocol is separate, planned work; until it lands, neither number is an untouched final estimate.
+| Model | Setting | Accuracy | Precision | Recall | ROC AUC |
+|---|---|---|---|---|---|
+| Logistic Regression (**selected**) | untouched holdout, evaluated once | 0.7991 | 0.6435 | 0.5455 | **0.8496** |
+| Logistic Regression | 5-fold CV, training portion | 0.8133 | 0.6746 | 0.5726 | 0.8591 (std 0.0142) |
+| DummyClassifier (naive baseline) | untouched holdout | 0.7346 | 0.0000 | 0.0000 | 0.5000 |
+
+Logistic Regression still wins under the same criterion as before (mean CV ROC AUC) and clears the naive floor, but the margin over the other candidates is not claimed to be significant, recall remains ~55%, and no hyperparameter search or threshold tuning was done. The dataset has no time index, so no temporal generalization is established.
+
+The **legacy single-split result** (ROC AUC **0.8494**, accuracy **0.8020**) is archived and labelled in [`evaluation/legacy/`](evaluation/legacy/) and must not be read as an untouched final estimate. Audit FGA-09 (a structured metrics artifact for the API) and hyperparameter work remain out of scope; see [`docs/reproduction_record.md`](docs/reproduction_record.md) §12 for the protocol record and provenance.
 
 ## Limitations and current status
 
@@ -25,8 +33,10 @@ Those published numbers are the **legacy single-split result**, archived and lab
 - **Reproducibility — pinned (Phase 2, 2026-10-05):** one supported runtime (CPython 3.11, `.python-version` = 3.11.2) and one pinned dependency set (`requirements.txt` + `requirements.lock.txt`) now define the environment; a second clean venv built from them froze to exactly the committed lock, and two training runs produced byte-identical reports *and* pickles. Python 3.12 — previously claimed here and in the Dockerfiles — was never run and could not be tested in this environment; the container images were aligned to `python:3.11-slim` but **no Docker build was executed**, so the container path remains documented-not-verified.
 - The endpoint verification scripts previously carried stale assertions (including pre-leakage LightGBM metrics in the shell script). They were rewritten against the current contract in Phase 1: `scripts/verify_endpoints.sh` passes **29/29** against a live API in the pinned environment and exits nonzero on a failed or missing check. `scripts/verify_endpoints.ps1` **has still never been executed** — no PowerShell runtime was available in either phase — so it is written and syntax-checked only.
 - No cloud deployment is established. The deployment workflow is disabled and no green CI claim is made. Docker/Streamlit files exist; their presence does not prove a working deployment, and the Streamlit demo is an **optional, unverified** path that no test exercises.
-- The committed Power BI screenshots are historical report captures. The refresh instructions below describe the intended local setup, not a newly verified live ODBC connection.
-- Code defects and evaluation protocols were not changed for this documentation pass, with two exceptions that change no metric: the Phase 1 KPI aggregate, and an optional `report_dir` parameter on `evaluate_all_models()` so `pytest` cannot rewrite the tracked comparison file.
+- The committed Power BI screenshots are historical report captures. The refresh instructions below describe the intended local setup, not a newly verified live ODBC connection. Their **Model Predictions** page and `dashboard/business_report.md` still quote the legacy single-split metrics; that is labelled as historical in the business report, and updating the capture is Phase 5 work.
+- **Evaluation protocol — replaced (Phase 3, 2026-10-06):** the earlier comparison trained all five models on one stratified split and picked the winner on that same holdout, with no baseline. The current protocol cross-validates the candidates plus a naive baseline on the training portion, freezes the winner, and evaluates it once on the untouched holdout. Metrics consequently changed; the legacy values remain archived and labelled. Logistic Regression still does not converge within `max_iter=1000`, which is recorded as an open problem rather than fixed, because fixing it would move the numbers again.
+- **Tenure reporting definitions — aligned (Phase 3, 2026-10-06):** `sql/analysis_queries.sql` used four tenure ranges while `view_churn_by_tenure_bucket` (the definition the committed dashboard visual renders) used three, so the same business question had two answers. The query now matches the view; the model's finer four-range `TenureBucket` feature is documented as a separate modelling input.
+- Code defects and evaluation protocols were not changed for this documentation pass, with four exceptions: the Phase 1 KPI aggregate (changes `/kpis` only), the optional `report_dir` parameter on `evaluate_all_models()` (so `pytest` cannot rewrite the tracked comparison file), the Phase 3 evaluation protocol (deliberately changes the published metrics, with the previous result archived), and the Phase 3 tenure-bucket alignment (changes the reporting query's grouping, no metric).
 
 **Project work:** July-August 2026. The earlier nine-day figure was a planning target, not demonstrated elapsed delivery time.
 
@@ -131,19 +141,22 @@ customer-churn-platform/
 ├── docs/
 │   └── data_dictionary.md
 ├── etl/             # Data ingestion and cleaning scripts
-├── evaluation/      # Published model comparison, plus legacy/ (historical archive) and reproduction/ (pinned rerun)
+├── evaluation/      # Current model comparison (Phase 3 protocol), legacy/ (historical archive) and reproduction/ (run logs)
 ├── schemas/         # Pydantic request/response schemas
 ├── sql/             # Schema DDL, analysis queries, views
 ├── tests/
 │   ├── test_api.py
 │   ├── test_etl.py
-│   ├── test_models.py
-│   └── test_sql_views.py      # SQL views tests
+│   ├── test_kpi_aggregate.py  # /kpis whole-table aggregate regression
+│   ├── test_models.py         # also covers the evaluation protocol
+│   ├── test_reproducibility.py
+│   └── test_sql_views.py      # SQL views + tenure-bucket definitions
 ├── training/        # Model training scripts
 ├── utils/           # Shared helper functions
 ├── data/
 │   └── raw/         # Tracked reproduction input: telco_churn_raw.csv (see docs/data_provenance.md)
 ├── scripts/
+│   ├── generate_model_comparison_csv.py  # Report -> Power BI CSV
 │   ├── verify_endpoints.sh    # Endpoint verification script (macOS/Linux)
 │   └── verify_endpoints.ps1   # Endpoint verification script (Windows PowerShell)
 ├── predict.py       # Prediction entry point
@@ -272,27 +285,25 @@ Run the complete model training and evaluation pipeline:
 python training/evaluate_models.py
 ```
 
-This command is intended to:
+This command runs the evaluation protocol (Phase 3, 2026-10-06):
 
-- Train all five machine learning models:
+- Split the data into a stratified 80/20 training/holdout split and **freeze the holdout**.
+- Score all five candidates and a `DummyClassifier` prior baseline with 5-fold stratified cross-validation on the **training portion only**:
   - Logistic Regression
   - Decision Tree
   - Random Forest
   - XGBoost
   - LightGBM
-- Evaluate each model using Accuracy, Precision, Recall, ROC AUC, and a Confusion Matrix.
-- Select the best-performing model based on the evaluation metrics.
+- Select the winner by mean cross-validated ROC AUC, refit it on the full training portion.
+- Evaluate the frozen winner and the baseline **once** on the untouched holdout, using Accuracy, Precision, Recall, ROC AUC and a Confusion Matrix.
 - Save the selected model to `models/best_model.pkl`.
 - Generate the evaluation report at `evaluation/model_comparison.md`.
 
-> **This overwrites a tracked file.** `evaluation/model_comparison.md` holds the *legacy* published result, so after running training your working tree will show it as modified. Compare it with the pinned rerun, then restore the committed bytes:
+The Power BI CSV is a separate, explicit step: `python scripts/generate_model_comparison_csv.py` converts the report's selection table into `evaluation/model_comparison.csv`.
+
+> **This overwrites a tracked file.** `evaluation/model_comparison.md` is the *current* published result, so running training rewrites it. In the supported environment the rewrite is byte-identical to the committed bytes ([`docs/reproduction_record.md`](docs/reproduction_record.md) §12); if your environment differs, `git diff` shows exactly what changed, and `git checkout -- evaluation/model_comparison.md` restores the committed result.
 >
-> ```bash
-> diff evaluation/model_comparison.md evaluation/reproduction/2026-10-05-pinned-single-split/model_comparison.md
-> git checkout -- evaluation/model_comparison.md
-> ```
->
-> In the supported environment the two are identical apart from Logistic Regression's and XGBoost's rows ([`docs/reproduction_record.md`](docs/reproduction_record.md) §6–7). `pytest` does **not** modify this file — the retraining tests redirect their report into a temporary directory, and a test fails if that ever stops being true.
+> `pytest` does **not** modify either tracked metrics file — the retraining tests redirect their report into a temporary directory, and tests fail if that ever stops being true.
 
 ### 3. Run the API locally
 

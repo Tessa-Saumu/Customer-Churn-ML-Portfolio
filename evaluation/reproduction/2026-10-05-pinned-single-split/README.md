@@ -10,11 +10,14 @@ holdout) in the **pinned** environment that Phase 2 established.
 | `model_comparison.csv` | `scripts/generate_model_comparison_csv.py` run against that report (note: the script writes CRLF line endings, the tracked legacy CSV is LF — see the reproduction record) |
 | `training.log` | Full stdout/stderr of the training run, including the 52-used-features LightGBM line and the Logistic Regression `ConvergenceWarning` |
 
-**These are NOT the repository's published metrics.** `evaluation/model_comparison.md`
-and `.csv` still hold the legacy committed values, byte-identical to
-[`../../legacy/`](../../legacy/). Phase 2 records this rerun; it does not declare
-new metrics. Phase 3 owns the protocol change and the replacement of the current
-report.
+**These were NOT the repository's published metrics, and are not now either.**
+At the time of this rerun, `evaluation/model_comparison.md` and `.csv` still held the
+legacy committed values, byte-identical to [`../../legacy/`](../../legacy/); Phase 2
+recorded this rerun without declaring new metrics. **Phase 3 has since replaced the
+protocol and the current report** (see
+[`../2026-10-06-phase3-cv-holdout/`](../2026-10-06-phase3-cv-holdout/README.md)), so
+treat the single-split numbers below as the predecessor record, not as a reference
+the current report should match.
 
 Full environment, commands, timings, checksums and the value-by-value comparison
 against the legacy result: [`docs/reproduction_record.md`](../../../docs/reproduction_record.md).

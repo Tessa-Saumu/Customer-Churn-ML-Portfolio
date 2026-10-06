@@ -49,8 +49,20 @@ ever stop matching these copies, so the archive cannot drift out of sync silentl
 
 ## Status
 
-Historical evidence of the leakage-corrected, single-split comparison. It is still
-what `/model-metrics` serves and what `README.md` quotes, because Phase 2 does not
-declare new metrics. Phase 3 replaces the protocol (baseline + training-side CV
-selection + one frozen final estimate); when it does, the current report is
-regenerated and this archive stays as the labelled predecessor.
+Historical evidence of the leakage-corrected, single-split comparison. It is no
+longer what `/model-metrics` serves.
+
+**Superseded on 2026-10-06 by Phase 3** (audit item FGA-05), which implemented the
+protocol this archive's description says it lacked: a naive baseline, model
+selection by training-side cross-validation, and one frozen final estimate on the
+untouched holdout. `evaluation/model_comparison.md` is now that protocol's output
+(Logistic Regression, untouched-holdout ROC AUC 0.8496 / accuracy 0.7991; the naive
+prior baseline reaches ROC AUC 0.5), and `README.md` quotes the new numbers. The
+bytes here are unchanged and stay frozen: they are the predecessor result, useful
+for showing exactly what the old selection bias consisted of, and `tests/test_reproducibility.py::TestMetricsArtifacts`
+asserts they keep their recorded hashes. Do not present them as a current estimate
+or compare them directly with the new protocol's numbers.
+
+The `evaluation/reproduction/2026-10-05-pinned-single-split/` folder remains as the
+pinned re-run of *this* protocol; the Phase 3 protocol's run log lives in
+`evaluation/reproduction/2026-10-06-phase3-cv-holdout/`.

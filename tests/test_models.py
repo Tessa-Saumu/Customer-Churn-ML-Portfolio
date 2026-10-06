@@ -513,11 +513,17 @@ class TestTrainingPipelineEndToEnd:
     database and confirms the resulting artifacts satisfy the same
     contracts as the unit tests above -- this is the slow, full-fidelity
     counterpart to the pre-existing-artifact unit tests.
+
+    Phase 3 note: `evaluate_all_models()` now runs the baseline + 5-fold
+    cross-validated selection + single frozen-holdout evaluation protocol
+    (audit item FGA-05), so `results_df` is the *selection* table -- one
+    row per candidate plus the naive baseline -- not the old five-row
+    holdout table.
     """
 
     def test_evaluate_all_models_produces_a_usable_artifact(self, tmp_path) -> None:
         """
-        Trains all five models and checks the artifacts it produces.
+        Runs the full Phase 3 protocol and checks the artifacts it produces.
 
         The Markdown report is redirected into `tmp_path` on purpose: it is a
         TRACKED file, and before Phase 2 this test (plus the two logging tests
@@ -530,14 +536,18 @@ class TestTrainingPipelineEndToEnd:
         it is gitignored, and the next test in this class deliberately reloads
         it to close the training -> prediction loop.
         """
-        from training.evaluate_models import evaluate_all_models
+        from training.evaluate_models import (
+            BASELINE_MODEL_NAME,
+            evaluate_all_models,
+        )
 
         tracked_report_before = _tracked_report_sha256()
         report_dir = tmp_path / "evaluation"
 
         results_df = evaluate_all_models(report_dir=report_dir)
 
-        assert len(results_df) == 5
+        # One row per candidate plus the baseline.
+        assert len(results_df) == 6
         expected_models = {
             "Logistic Regression",
             "Decision Tree",
@@ -545,20 +555,27 @@ class TestTrainingPipelineEndToEnd:
             "XGBoost",
             "LightGBM",
         }
-        assert set(results_df["model_name"]) == expected_models
+        assert set(results_df["model_name"]) == expected_models | {BASELINE_MODEL_NAME}
 
         for metric in ("accuracy", "precision", "recall", "roc_auc"):
             assert (results_df[metric] >= 0.0).all()
             assert (results_df[metric] <= 1.0).all()
 
+        # Cross-validation bookkeeping: one fold score per fold, per model.
+        from training.evaluate_models import CV_N_SPLITS
+
+        assert (results_df["n_folds"] == CV_N_SPLITS).all()
+        assert (results_df["fold_roc_auc"].apply(len) == CV_N_SPLITS).all()
+
         assert MODEL_PATH.exists()
         assert METRICS_PATH.exists()
         # The report this run produced is the redirected one, not the tracked one.
-        assert (report_dir / "model_comparison.md").exists()
-        assert (
-            "## Selected Model"
-            in (report_dir / "model_comparison.md").read_text(encoding="utf-8")
-        )
+        report_path = report_dir / "model_comparison.md"
+        assert report_path.exists()
+        report_text = report_path.read_text(encoding="utf-8")
+        assert "## Selected Model" in report_text
+        assert "## Model selection" in report_text
+        assert "DummyClassifier" in report_text
         # ... and the tracked report was left alone.
         assert _tracked_report_sha256() == tracked_report_before, (
             "Running the test suite modified the tracked "
@@ -628,3 +645,319 @@ class TestTrainingAndEvaluationLoggingCoverage:
 
         messages = [record.message for record in caplog.records]
         assert any("Best model" in message for message in messages)
+
+# ======================================================================
+# SECTION 3 -- PHASE 3 EVALUATION PROTOCOL (audit item FGA-05)
+#
+# The protocol is: outer stratified split -> 5-fold stratified cross-validation
+# on the TRAINING portion only (candidates + naive baseline) -> freeze the winner
+# -> refit it on the full training portion -> evaluate the frozen winner and the
+# baseline once on the UNTOUCHED holdout.
+#
+# These tests pin the properties that make that protocol honest. They do not
+# re-assert the metric values (those belong to a reproduction record, not to a
+# test), and the expensive selection run is shared per class.
+# ======================================================================
+
+
+@pytest.fixture(scope="module")
+def selection_protocol_run():
+    """
+    Run the training-side half of the protocol once and share it across the
+    module: the full 5-fold comparison over five candidates takes ~12 s, which is
+    too slow to repeat per test or per class.
+    """
+    from types import SimpleNamespace
+
+    from training.evaluate_models import select_best_model
+    from training.train_test_split import split_training_data
+
+    X_train, X_test, y_train, y_test, _unused = split_training_data()
+    best_model_name, selection_results = select_best_model(X_train, y_train)
+
+    return SimpleNamespace(
+        best_model_name=best_model_name,
+        selection_results=selection_results,
+        X_train=X_train,
+        X_test=X_test,
+        y_train=y_train,
+        y_test=y_test,
+    )
+
+
+@pytest.mark.integration
+@requires_populated_db
+class TestSelectionCannotSeeTheHoldout:
+    """
+    Acceptance criterion: "The new report contains no selection leakage from the
+    final test."
+
+    Two guards: the structural one (the selection function has no parameter that
+    could carry holdout rows) and the observable one (the cross-validation
+    confusion matrices count exactly the training portion, never the holdout).
+    """
+
+    def test_select_best_model_accepts_only_training_data(self) -> None:
+        import inspect
+
+        from training.evaluate_models import select_best_model
+
+        parameters = list(inspect.signature(select_best_model).parameters)
+        assert parameters == ["X_train", "y_train", "cv"], (
+            "select_best_model must be callable with the training portion only. "
+            f"Its parameters are {parameters}; if a test/holdout argument was "
+            "added, the freeze-before-holdout guarantee is gone."
+        )
+
+    def test_cross_validation_covers_the_training_portion_not_the_holdout(
+        self, selection_protocol_run
+    ) -> None:
+        run = selection_protocol_run
+        n_train = len(run.X_train)
+
+        assert n_train + len(run.X_test) > n_train  # sanity: the holdout exists
+        for _, row in run.selection_results.iterrows():
+            fold_total = sum(sum(pair) for pair in row["confusion_matrix"])
+            assert fold_total == n_train, (
+                f"{row['model_name']} was cross-validated over {fold_total} rows, "
+                f"but the training portion has {n_train}. Scoring "
+                f"{len(run.X_test)} rows would mean the holdout reached the "
+                "selection code."
+            )
+
+    def test_outer_split_partitions_the_dataset_without_overlap(self) -> None:
+        from training.preprocessing import prepare_training_data
+        from training.train_test_split import split_training_data
+
+        X, _y = prepare_training_data()
+        X_train, X_test, y_train, y_test, _unused = split_training_data()
+
+        assert len(X_train) + len(X_test) == len(X)
+        assert set(X_train.index).isdisjoint(set(X_test.index)), (
+            "a row appears in both the training and holdout portions"
+        )
+        assert len(y_train) == len(X_train) and len(y_test) == len(X_test)
+        # The recorded split sizes (docs/reproduction_record.md §4).
+        assert len(X_train) == 5634
+        assert len(X_test) == 1409
+
+
+@pytest.mark.integration
+@requires_populated_db
+class TestSelectionProtocol:
+    """
+    Acceptance criteria: every candidate and the baseline are measured under the
+    same inner folds; the baseline is a reported floor and never selected; the
+    winner is the highest mean cross-validated ROC AUC among the candidates.
+    """
+
+    CANDIDATES = (
+        "Logistic Regression",
+        "Decision Tree",
+        "Random Forest",
+        "XGBoost",
+        "LightGBM",
+    )
+
+    def test_selection_table_has_every_candidate_plus_the_baseline(
+        self, selection_protocol_run
+    ) -> None:
+        from training.evaluate_models import BASELINE_MODEL_NAME
+
+        run = selection_protocol_run
+        assert set(run.selection_results["model_name"]) == set(self.CANDIDATES) | {
+            BASELINE_MODEL_NAME
+        }
+
+    def test_every_model_uses_the_same_inner_folds(self, selection_protocol_run) -> None:
+        from training.evaluate_models import CV_N_SPLITS
+
+        run = selection_protocol_run
+        assert (run.selection_results["n_folds"] == CV_N_SPLITS).all()
+        # Same fold count for everyone, and each row carries its own fold scores,
+        # so the comparison in the report is provably like-for-like.
+        for _, row in run.selection_results.iterrows():
+            assert len(row["fold_roc_auc"]) == CV_N_SPLITS
+
+    def test_cross_validated_mean_is_the_reported_mean(self, selection_protocol_run) -> None:
+        import statistics
+
+        run = selection_protocol_run
+        for _, row in run.selection_results.iterrows():
+            assert row["roc_auc"] == pytest.approx(
+                statistics.fmean(row["fold_roc_auc"]), rel=1e-12
+            )
+            assert row["roc_auc_std"] == pytest.approx(
+                statistics.stdev(row["fold_roc_auc"]), rel=1e-12
+            )
+
+    def test_baseline_scores_a_coin_flip_and_is_never_selected(
+        self, selection_protocol_run
+    ) -> None:
+        from training.evaluate_models import BASELINE_MODEL_NAME
+
+        run = selection_protocol_run
+        baseline = run.selection_results.loc[
+            run.selection_results["model_name"] == BASELINE_MODEL_NAME
+        ].iloc[0]
+
+        # DummyClassifier(strategy="prior") ignores the features, so its ROC AUC
+        # is 0.5 in every fold by construction and it predicts no positive.
+        assert baseline["roc_auc"] == pytest.approx(0.5)
+        assert baseline["recall"] == 0.0
+        assert baseline["precision"] == 0.0
+        assert all(score == pytest.approx(0.5) for score in baseline["fold_roc_auc"])
+
+        assert run.best_model_name != BASELINE_MODEL_NAME, (
+            "the naive baseline was selected -- selection must only ever pick one "
+            "of the five real candidates"
+        )
+
+    def test_winner_is_the_candidate_with_the_highest_mean_cv_roc_auc(
+        self, selection_protocol_run
+    ) -> None:
+        run = selection_protocol_run
+        candidates = run.selection_results[
+            run.selection_results["model_name"].isin(self.CANDIDATES)
+        ]
+        expected = candidates.sort_values(
+            "roc_auc", ascending=False, kind="stable"
+        ).iloc[0]["model_name"]
+
+        assert run.best_model_name == expected
+        # And it actually beats the naive floor, which is the only claim the
+        # baseline supports.
+        winner_auc = candidates.loc[
+            candidates["model_name"] == run.best_model_name, "roc_auc"
+        ].iloc[0]
+        assert winner_auc > 0.5
+
+
+@pytest.mark.unit
+class TestComparisonReportContract:
+    """
+    The report is a machine-readable artifact as much as a document:
+    `app/services/metrics_service.py` takes the first `- Accuracy:`-shaped line
+    (the selected model's holdout value) and
+    `scripts/generate_model_comparison_csv.py` converts the `## Model selection`
+    table. Both couplings are pinned here on synthetic inputs, so a formatting
+    change that breaks either reader fails a fast unit test instead of the API.
+    """
+
+    @staticmethod
+    def _selection_frame() -> pd.DataFrame:
+        return pd.DataFrame(
+            [
+                {
+                    "model_name": "Logistic Regression",
+                    "accuracy": 0.8133,
+                    "precision": 0.6746,
+                    "recall": 0.5726,
+                    "roc_auc": 0.8591,
+                    "roc_auc_std": 0.0142,
+                    "fold_roc_auc": [0.8615, 0.8386, 0.8517, 0.8707, 0.8732],
+                    "n_folds": 5,
+                    "confusion_matrix": [[3726, 413], [639, 856]],
+                },
+                {
+                    "model_name": "DummyClassifier (baseline)",
+                    "accuracy": 0.7346,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "roc_auc": 0.5,
+                    "roc_auc_std": 0.0,
+                    "fold_roc_auc": [0.5, 0.5, 0.5, 0.5, 0.5],
+                    "n_folds": 5,
+                    "confusion_matrix": [[4139, 0], [1495, 0]],
+                },
+            ]
+        )
+
+    @staticmethod
+    def _holdout_frame() -> pd.DataFrame:
+        return pd.DataFrame(
+            [
+                {
+                    "model_name": "Logistic Regression",
+                    "accuracy": 0.799148,
+                    "precision": 0.643533,
+                    "recall": 0.545455,
+                    "roc_auc": 0.849562,
+                    "confusion_matrix": [[922, 113], [170, 204]],
+                },
+                {
+                    "model_name": "DummyClassifier (baseline)",
+                    "accuracy": 0.734564,
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "roc_auc": 0.5,
+                    "confusion_matrix": [[1035, 0], [374, 0]],
+                },
+            ]
+        )
+
+    def _write(self, tmp_path: Path) -> str:
+        from training.evaluate_models import write_comparison_report
+
+        report_path = tmp_path / "model_comparison.md"
+        write_comparison_report(
+            report_path, self._selection_frame(), self._holdout_frame()
+        )
+        return report_path.read_text(encoding="utf-8")
+
+    def test_first_metric_bullets_are_the_selected_models_holdout_values(
+        self, tmp_path: Path
+    ) -> None:
+        report = self._write(tmp_path)
+
+        # Same extraction the API service uses on the real report.
+        assert "- Accuracy: 0.7991" in report
+        assert "- Precision: 0.6435" in report
+        assert "- Recall: 0.5455" in report
+        assert "- ROC AUC: 0.8496" in report
+        # The cross-validation values must NOT appear in that bullet shape, or
+        # the API would report the training-side means as the final result.
+        assert "- Accuracy: 0.8133" not in report
+        assert "- ROC AUC: 0.8591" not in report
+
+    def test_selection_table_is_convertible_to_the_power_bi_csv(
+        self, tmp_path: Path
+    ) -> None:
+        import importlib.util
+
+        report = self._write(tmp_path)
+        script = REPO_ROOT / "scripts" / "generate_model_comparison_csv.py"
+        spec = importlib.util.spec_from_file_location(
+            "generate_model_comparison_csv", script
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        rows = module.build_csv_rows(module.parse_table(report))
+        assert [row["Model"] for row in rows] == [
+            "Logistic Regression",
+            "DummyClassifier (baseline)",
+        ]
+        assert rows[0]["ROC_AUC"] == "0.8591"
+        assert (
+            rows[0]["True_Negatives"],
+            rows[0]["False_Positives"],
+            rows[0]["False_Negatives"],
+            rows[0]["True_Positives"],
+        ) == (3726, 413, 639, 856)
+
+    def test_report_labels_the_protocol_baseline_and_limits(self, tmp_path: Path) -> None:
+        report = self._write(tmp_path)
+
+        assert "## Model selection" in report
+        assert "cross-validation" in report.lower()
+        assert "untouched holdout" in report.lower()
+        assert "DummyClassifier" in report
+        assert "not comparable" in report.lower()  # vs. the archived legacy result
+        assert "no time index" in report
+        assert "no hyperparameter search" in report.lower()
+        # Provenance: an input checksum and the package versions that produced
+        # these numbers must be in the report itself.
+        assert "SHA-256" in report
+        assert "scikit-learn" in report

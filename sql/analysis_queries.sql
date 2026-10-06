@@ -28,15 +28,25 @@ ORDER BY churn_rate_percentage DESC;
 -- ==========================================================
 -- Business Question 3:
 -- Which customer tenure group has the highest churn rate?
+--
+-- Grouping aligned to view_churn_by_tenure_bucket (sql/views.sql)
+-- on 2026-10-06 (Phase 3, audit item FGA-06). This query previously
+-- used four ranges (0-12 / 13-24 / 25-48 / 49-72) while the view --
+-- the definition the committed Power BI "Churn Rate by Tenure"
+-- visual renders -- used three. Two different answers to the same
+-- business question is a consistency defect, not a feature, so the
+-- reporting-facing query now matches the view. The model's
+-- engineered TenureBucket feature is a separate, deliberately finer
+-- modelling input and is documented as such in
+-- docs/data_dictionary.md. Boundaries are pinned by
+-- tests/test_sql_views.py::TestTenureBucketDefinitions.
 -- ==========================================================
 
 SELECT
 CASE
 WHEN tenure_months BETWEEN 0 AND 12 THEN '0-12 Months'
-WHEN tenure_months BETWEEN 13 AND 24 THEN '13-24 Months'
-WHEN tenure_months BETWEEN 25 AND 48 THEN '25-48 Months'
-WHEN tenure_months BETWEEN 49 AND 72 THEN '49-72 Months'
-ELSE 'Outside Defined Range'
+WHEN tenure_months BETWEEN 13 AND 36 THEN '13-36 Months'
+ELSE '37+ Months'
 END AS tenure_bucket,
 COUNT(*) AS total_customers,
 SUM(CASE WHEN churn_label = 'Yes' THEN 1 ELSE 0 END) AS churned_customers,

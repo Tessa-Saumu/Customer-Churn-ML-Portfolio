@@ -43,9 +43,12 @@ Which customer tenure group experiences the highest churn?
 ### Tenure Buckets
 
 - 0–12 Months
-- 13–24 Months
-- 25–48 Months
-- 49–72 Months
+- 13–36 Months
+- 37+ Months
+
+These are the same boundaries and labels as `view_churn_by_tenure_bucket` (`sql/views.sql`), which the committed Power BI "Churn Rate by Tenure" visual renders. Before 2026-10-06 this query used four ranges (0–12, 13–24, 25–48, 49–72) while the view used three, so the same business question had two different answers (audit item FGA-06). The query now matches the view; `tests/test_sql_views.py::TestTenureBucketDefinitions` pins the boundaries and compares the two outputs.
+
+The model's engineered `TenureBucket` feature (`training/feature_engineering.py`) is a **different, deliberately finer grouping** (0–12, 13–24, 25–48, 49–72 months) used only as a model input; it is not a reporting definition and its counts should not be compared with this table. See `docs/data_dictionary.md`.
 
 ### Purpose
 

@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -558,29 +559,136 @@ class TestEnvironmentFileTakesEffect:
 @pytest.mark.unit
 class TestMetricsArtifacts:
     """
-    Phase 2's metric-preservation rule: the committed comparison is the legacy
-    single-split result and must stay byte-identical, with the pinned rerun
-    recorded separately and labelled. Nothing -- `pytest`, a local training run,
-    the CSV generator -- may change the published numbers without an explicit,
-    documented replacement (that happens in Phase 3).
+    Metric-preservation rule (Phase 2), as amended by Phase 3.
+
+    Phase 2 required the committed comparison to stay byte-identical to its
+    archived legacy copy. Phase 3 then *deliberately* replaced the published
+    protocol (baseline + training-side cross-validation + one frozen holdout
+    evaluation, audit item FGA-05), so the tracked report is no longer the
+    legacy bytes. What the rule protects now:
+
+    * the legacy single-split bytes stay archived and frozen at their recorded
+      hashes, labelled historical (they are evidence, never a current result);
+    * the tracked report is the *current* protocol's output and says so;
+    * the pinned single-split rerun stays a separately recorded reference.
+
+    Nothing here may move without an explicit, documented replacement.
     """
 
-    def test_tracked_report_matches_the_archived_legacy_copy(self) -> None:
+    # The legacy single-split result is frozen evidence. These are the hashes
+    # recorded in evaluation/legacy/README.md and docs/reproduction_record.md.
+    LEGACY_REPORT_SHA256 = (
+        "a976bb7b75f47a45bf59856c0d8d3c4fcd79700127bf34ff8c3f7ea82073bcf3"
+    )
+    LEGACY_REPORT_CSV_SHA256 = (
+        "04d35816cc5300ee7dad379ed69874b13a2bfe253e28550009cc0fd4247053af"
+    )
+
+    def test_archived_legacy_result_stays_frozen(self) -> None:
         assert LEGACY_REPORT.exists(), (
             "evaluation/legacy/model_comparison_single_split.md is missing -- the "
             "legacy result must stay recoverable"
         )
-        assert _sha256(TRACKED_REPORT) == _sha256(LEGACY_REPORT), (
-            "evaluation/model_comparison.md differs from its archived legacy copy. "
-            "Running the test suite or the training pipeline must not change the "
-            "committed metrics; if this is an intentional replacement, archive the "
-            "previous bytes under evaluation/legacy/ and label them first."
+        assert LEGACY_REPORT_CSV.exists()
+        assert _sha256(LEGACY_REPORT) == self.LEGACY_REPORT_SHA256, (
+            "the archived single-split result changed. It is historical evidence "
+            "and must keep its exact bytes; if a new protocol replaces the current "
+            "report, archive those bytes separately and label them."
+        )
+        assert _sha256(LEGACY_REPORT_CSV) == self.LEGACY_REPORT_CSV_SHA256
+
+    def test_tracked_report_is_the_current_protocols_output(self) -> None:
+        assert TRACKED_REPORT.exists(), "the current model comparison is missing"
+        text = TRACKED_REPORT.read_text(encoding="utf-8")
+
+        # It must be the Phase 3 protocol, and it must not be the legacy bytes.
+        assert _sha256(TRACKED_REPORT) != self.LEGACY_REPORT_SHA256, (
+            "evaluation/model_comparison.md is byte-identical to the archived "
+            "legacy result, so the Phase 3 protocol's output was never published."
+        )
+        assert "## Model selection" in text, (
+            "the current report must carry the cross-validated selection table "
+            "(Phase 3 / FGA-05)"
+        )
+        assert "cross-validation" in text.lower()
+        assert "untouched holdout" in text.lower(), (
+            "the report must state that the holdout is evaluated once, after "
+            "selection -- that is the point of the Phase 3 protocol"
+        )
+        assert "DummyClassifier" in text and "baseline" in text.lower(), (
+            "the report must include the naive baseline"
         )
 
-    def test_tracked_csv_matches_the_archived_legacy_copy(self) -> None:
-        assert LEGACY_REPORT_CSV.exists()
-        assert _sha256(TRACKED_REPORT_CSV) == _sha256(LEGACY_REPORT_CSV), (
-            "evaluation/model_comparison.csv differs from its archived legacy copy"
+    def test_tracked_csv_matches_the_current_report(self) -> None:
+        """The CSV is generated from the report's selection table, not hand-made."""
+        assert TRACKED_REPORT_CSV.exists()
+        assert _sha256(TRACKED_REPORT_CSV) != self.LEGACY_REPORT_CSV_SHA256, (
+            "evaluation/model_comparison.csv still holds the archived legacy "
+            "values while the report has moved on"
+        )
+
+        script = REPO_ROOT / "scripts" / "generate_model_comparison_csv.py"
+        spec = importlib.util.spec_from_file_location(
+            "generate_model_comparison_csv", script
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        report_text = TRACKED_REPORT.read_text(encoding="utf-8")
+        rows = module.build_csv_rows(module.parse_table(report_text))
+        tracked_csv = TRACKED_REPORT_CSV.read_text(encoding="utf-8").splitlines()
+
+        # Line endings are checked on the RAW bytes: `splitlines()` strips "\r",
+        # so a text-mode check here would pass even for a CRLF file (verified by
+        # a negative control that converted the committed CSV to CRLF).
+        assert b"\r" not in TRACKED_REPORT_CSV.read_bytes(), (
+            "the committed CSV must use LF line endings (NEW-10)"
+        )
+
+        assert len(rows) == len(tracked_csv) - 1, (
+            "the committed CSV has a different number of model rows than the "
+            "report's selection table"
+        )
+        for row, csv_line in zip(rows, tracked_csv[1:]):
+            expected = ",".join(str(row[column]) for column in row)
+            assert csv_line == expected, (
+                f"the committed CSV row {csv_line!r} does not match the report "
+                f"row {expected!r}. Re-run scripts/generate_model_comparison_csv.py."
+            )
+
+    def test_csv_generator_writes_lf_line_endings(self, tmp_path: Path) -> None:
+        """
+        NEW-10's actual fix, checked on the generator's own output rather than on
+        whatever happens to be committed.
+
+        Before 2026-10-06 the script used csv.DictWriter's default lineterminator
+        ("\r\n") while the committed CSV was LF, so re-running the documented
+        step produced a whole-file diff even when every value was identical.
+        """
+        script = REPO_ROOT / "scripts" / "generate_model_comparison_csv.py"
+        spec = importlib.util.spec_from_file_location(
+            "generate_model_comparison_csv", script
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        rows = module.build_csv_rows(
+            module.parse_table(TRACKED_REPORT.read_text(encoding="utf-8"))
+        )
+        output = tmp_path / "generated.csv"
+        module.write_csv(rows, output)
+
+        raw = output.read_bytes()
+        assert b"\r" not in raw, (
+            "scripts/generate_model_comparison_csv.py is writing CRLF again, which "
+            "makes a re-run of the documented CSV step dirty the whole file (NEW-10)"
+        )
+        assert raw == TRACKED_REPORT_CSV.read_bytes(), (
+            "the generator no longer reproduces the committed CSV byte-for-byte; "
+            "re-run scripts/generate_model_comparison_csv.py and commit the result "
+            "together with this phase's report"
         )
 
     def test_legacy_archive_is_labelled_historical(self) -> None:

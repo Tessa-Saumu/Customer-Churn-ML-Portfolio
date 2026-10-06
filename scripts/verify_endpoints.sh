@@ -229,10 +229,12 @@ check "GET /model-metrics with API key -> 200" 200 \
 # Issue #14: /model-metrics must be real values parsed from
 # evaluation/model_comparison.md's Selected Model block, not Issue
 # #10's fixed placeholder {0.89, 0.86, 0.81, 0.91}. Exact numbers are
-# deliberately NOT pinned here -- unpinned dependencies move them
-# between environments (measured drift: Logistic Regression ROC AUC
-# 0.8494 -> 0.8496). What is asserted is the contract, the value
-# ranges, and the absence of the two known-invalid result sets.
+# deliberately NOT pinned here -- the report is regenerated whenever
+# the protocol or the environment changes (Phase 3, 2026-10-06,
+# replaced the single-split selection with cross-validation plus one
+# frozen holdout evaluation). What is asserted is the contract, the
+# value ranges, the absence of the two known-invalid result sets, and
+# agreement with whatever the report currently says.
 check_content "GET /model-metrics has exactly the four locked keys" \
     '(keys | sort) == ["accuracy", "precision", "recall", "roc_auc"]'
 

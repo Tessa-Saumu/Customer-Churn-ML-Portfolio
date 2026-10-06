@@ -63,7 +63,7 @@ The following features are created dynamically during the machine learning pipel
 
 | Feature | Derived From | Description | Purpose |
 |---------|--------------|-------------|---------|
-| TenureBucket | tenure_months | Groups customers into four tenure ranges (0–12, 13–24, 25–48 and 49-72 months). Values greater than 72 months are not assigned to a bucket and currently become `NaN`, which is a documented known limitation (see `docs/qa_findings.md`, Finding 6). | Helps the model capture non-linear relationships between customer tenure and churn. |
+| TenureBucket | tenure_months | Model-input grouping with four ranges: 0–12, 13–24, 25–48 and 49–72 months (`bins = [-1, 12, 24, 48, 72]`). Values greater than 72 months are not assigned to a bucket and currently become `NaN`, which is a documented known limitation (see `docs/qa_findings.md`, Finding 6). This is **not** the reporting definition: the SQL view and the dashboard use 0–12 / 13–36 / 37+ months (see `docs/sql_analysis_summary.md`). The two groupings are intentionally separate — the feature exists to give the model finer tenure resolution — and their counts must not be compared. | Helps the model capture non-linear relationships between customer tenure and churn. |
 | TotalServicesCount | Service subscription columns | Counts the number of subscribed services (`Yes` values) across phone, internet support and streaming services. | Represents overall customer engagement and service adoption. |
 | AvgMonthlySpend | total_charges, tenure_months | Calculates average spend over the customer's lifetime (`total_charges ÷ tenure_months`), replacing zero tenure with one to avoid division by zero. | Provides a normalized spending metric for modeling customer value. |
 
@@ -119,6 +119,14 @@ Provides reusable contract-level churn metrics for reporting and Power BI dashbo
 ### Purpose
 
 Provides reusable tenure-based churn metrics for reporting and dashboard visualizations.
+
+### Tenure buckets
+
+- `0-12 Months` — `tenure_months` between 0 and 12
+- `13-36 Months` — `tenure_months` between 13 and 36
+- `37+ Months` — `tenure_months` of 37 or more
+
+These are the reporting-facing boundaries. They match Business Question 3 in `sql/analysis_queries.sql` (aligned 2026-10-06, audit item FGA-06) and the committed Power BI "Churn Rate by Tenure" visual. The machine-learning `TenureBucket` feature uses different, finer ranges and is not comparable.
 
 ### Metrics
 
