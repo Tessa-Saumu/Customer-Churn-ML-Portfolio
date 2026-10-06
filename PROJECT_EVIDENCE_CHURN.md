@@ -3,6 +3,17 @@
 Repository: `Tessa-Saumu/Customer-Churn-Prediction-BI-Platform` (GitHub)
 Evidence gathered: 2026-09-26, from the full GitHub history (91 commits, 21 PRs, 20 issues), the committed tree at `e6e4a0f`, and a full local re-run of the pipeline (ETL → training → API → tests) performed for this document.
 
+> **Superseded in part (2026-10-06).** This is a *dated* evidence record about the
+> **original team repository**, retained as historical context. Metrics it quotes
+> (e.g. Logistic Regression accuracy 0.8020 / ROC AUC 0.8494, confusion matrix
+> 922/113/166/208) describe that repository's single-split result **at the time**
+> and are superseded for this portfolio copy by the Phase 3 evaluation protocol
+> recorded in [`evaluation/model_comparison.md`](evaluation/model_comparison.md)
+> (untouched-holdout accuracy 0.7991 / ROC AUC 0.8496) and
+> [`docs/reproduction_record.md`](docs/reproduction_record.md) §12. Read the body
+> below for the team/ownership/leakage narrative — it remains accurate — but not
+> for current numbers.
+
 ---
 
 ## Context

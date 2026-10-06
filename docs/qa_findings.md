@@ -462,9 +462,33 @@ whether the running environment resolves pandas 2.x or 3.x.
 > service ever reads only a page again. The verification scripts were
 > rewritten to assert the current contract (FGA-02).
 >
-> **Pass/skip counts are deliberately not restated here.** A clean,
-> artifact-present re-run is part of Phase 4; until that run exists,
-> the counts below are a dated historical result only.
+> **Pass/skip counts are deliberately not restated here.** The counts
+> below are a dated historical result only. The current figures live
+> immediately after this note, under "Current status (2026-10-06)".
+
+> **CURRENT STATUS — measured 2026-10-06 (Phase 4/5), pinned environment**
+> (CPython 3.11.2, `requirements.txt` constrained by
+> `requirements.lock.txt`):
+>
+> - **Artifact-present suite: 151 passed / 0 failed / 0 skipped**, after
+>   rebuilding `database/churn.db` and `models/best_model.pkl` from the
+>   tracked CSV. The zero is the point: `.github/workflows/ci.yml`
+>   treats any skip in this state as a failure, because a skip here
+>   means an artifact-dependent test never ran.
+> - **Fresh-clone suite (no artifacts): 68 passed / 83 skipped / 0
+>   failed.** Those 83 skips are exactly why the CI run above is the
+>   one that counts.
+> - **Endpoint checks:** `scripts/verify_endpoints.sh` → **29 passed /
+>   0 failed / 0 skipped, exit 0** against a live API.
+>   `scripts/verify_endpoints.ps1` → **still never executed** (no
+>   PowerShell runtime in the environment where this work was done).
+> - **CI has not produced a green run.** The workflow is committed and
+>   every step of it was executed locally in order, but GitHub refused
+>   to start the job: *"The job was not started because your account is
+>   locked due to a billing issue."* The job ran zero steps. No green
+>   CI claim is made anywhere in this repository.
+> - Finding 16 below is the one High-severity row and is fixed; see the
+>   summary table.
 
 **Scope note:** this section covers the full-system regression pass
 performed after Issues #13, #14, #16, and #17 were all merged, owned
@@ -776,8 +800,12 @@ changed afterwards):**
   pre-leakage LightGBM figures, and both scripts asserted a
   whole-table `customer_count` that the paginated `/kpis` no longer
   returned. Both were rewritten in Phase 1 (FGA-02) and now assert
-  29 checks against the current contract; they have not yet been
-  re-run as a pair on a PowerShell-capable machine.
+  29 checks against the current contract. **As of 2026-10-06 the Bash
+  script has been re-run and passes 29/29 with exit 0; the PowerShell
+  twin has still never been executed on any machine.** "All 19 checks
+  passed" (2026-07-29, PowerShell) and the current 29-check scripts are
+  therefore two different things, and neither is evidence about the
+  other.
 - **Manual end-to-end walkthrough:** completed in full at that date
   — CSV load →
   ETL → DB population (7,043 rows) → model training (5 models,
@@ -785,7 +813,15 @@ changed afterwards):**
   endpoints verified live → Power BI dashboard connects via ODBC and
   refreshes correctly against a fresh clone, including the
   `ProjectPath` parameter reset (already documented in README Power
-  BI setup section 3, confirmed still accurate).
+  BI setup section 3, confirmed still accurate). *Qualification added
+  2026-10-06: the Power BI half of this bullet is a 2026-07-29
+  observation by the original author and has **not** been reproduced
+  since — no Power BI Desktop environment was available during this
+  work. The committed screenshots are historical captures, and the
+  ODBC steps in the README are documented setup instructions rather
+  than a verified live connection. The pipeline half of this bullet
+  (CSV → ETL → DB → training → API → endpoints) **was** re-run
+  end-to-end on 2026-10-06; see `docs/reproduction_record.md`.*
 - **Code quality:** zero `print()` statements in project-owned code
   (confirmed via full-repo search). Typing is complete across all
   files except Finding 14's documented gap, deferred to Issue #20.

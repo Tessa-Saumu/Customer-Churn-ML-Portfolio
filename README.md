@@ -10,6 +10,77 @@ The team built a local workflow over the [IBM Telco dataset](https://www.kaggle.
 
 ETL, model training, API scaffolding, SQL analysis and dashboard work had other owners. Mentor contributions include scaffolding, pagination, Docker and Streamlit. This is team integration and QA evidence, not sole authorship of the platform.
 
+## Architecture, quickstart and evidence at a glance
+
+The four consumer paths (SQL analytics, model training, the API, and BI) are
+distinct, and only the API serves predictions. Nothing here is deployed; every
+arrow below is a local file or a documented local step.
+
+```text
+                     data/raw/telco_churn_raw.csv
+                     (tracked input · 7,043 rows · SHA-256 e984530b…)
+                                    │  etl/clean_data.py → etl/load_to_db.py
+                                    ▼
+                      ┌──────────────────────────────┐
+                      │  database/churn.db (SQLite)  │  generated, gitignored
+                      │  customers · 7,043 rows      │
+                      └──────────────────────────────┘
+                       │                      │
+        database/init_views.py                 training/data_loader.py
+                       │                      │
+                       ▼                      ▼
+   ┌────────────────────────────┐  ┌───────────────────────────────────┐
+   │ SQL layer                  │  │ training/                          │
+   │  view_churn_by_contract    │  │ 5 candidates + prior baseline,     │
+   │  view_churn_by_tenure_bucket│  │ 5-fold CV on the training 80%,    │
+   │  sql/analysis_queries.sql  │  │ freeze winner → 1 holdout eval     │
+   └────────────────────────────┘  └───────────────────────────────────┘
+                       │                     │                │
+                       │                     ▼                ▼
+                       │          models/best_model.pkl   evaluation/model_comparison.md
+                       │          (generated, gitignored)   (+ model_comparison.csv)
+                       │                     │                │
+                       │        ┌────────────┴────────────────┴──────────┐
+                       │        │ FastAPI · app/main.py · X-API-Key auth │
+                       └───────►│  GET  /health            (no auth)     │
+                                │  GET  /customers         paginated     │
+                                │  GET  /kpis              whole-table   │
+                                │  POST /predict           serves pickle │
+                                │  GET  /model-metrics     parses report │
+                                └────────────────────────────────────────┘
+                       │
+                       ▼
+   ┌────────────────────────────┐    ┌─────────────────────────────┐
+   │ Power BI (.pbix)           │    │ streamlit-app.py             │
+   │  ODBC DSN → the SQL views  │    │ optional demo — unverified,  │
+   │  ProjectPath → the CSV     │    │ exercised by no test         │
+   └────────────────────────────┘    └─────────────────────────────┘
+```
+
+Five commands reproduce the whole local path (full instructions, env setup and
+the macOS/Windows caveat are in [Running the Project](#running-the-project)):
+
+```bash
+python -m venv venv && source venv/bin/activate
+pip install --upgrade pip wheel && pip install -r requirements.txt
+python database/init_db.py && python etl/load_to_db.py && python database/init_views.py
+python training/evaluate_models.py
+API_KEY=<any-key> uvicorn app.main:app & API_KEY=<any-key> ./scripts/verify_endpoints.sh
+```
+
+**Current evidence** — the Churn Drivers page is the one capture that is verifiably
+current: every figure it shows (26.54% churn, 1,869 churned, 5,174 active; contract
+rates 42.71 / 11.27 / 2.83%; tenure buckets 47 / 26 / 12%) was re-queried from the
+live SQL views on 2026-10-06 and matched exactly. The Model Predictions capture is
+historical and labelled as such.
+
+![Churn Drivers — verified current capture](dashboard/screenshots/churn_drivers.jpg)
+
+**Status in one line:** reproduced end-to-end in a pinned environment and enforced by
+a single CI workflow (`.github/workflows/ci.yml`) that, on a runner, can be green only
+with zero test skips — but see [Limitations](#limitations-and-current-status): GitHub
+Actions could not start a job for this account, so no green CI run is claimed.
+
 ## Evaluation and key finding
 
 Integration exposed an outcome-derived `churn_score` feature unavailable in real prediction requests. It was removed from model inputs and the comparison was rerun. Earlier leakage-affected figures are not valid predictive-performance evidence.
@@ -29,14 +100,14 @@ The **legacy single-split result** (ROC AUC **0.8494**, accuracy **0.8020**) is 
 ## Limitations and current status
 
 - **KPI boundary — repaired (post-sprint, Phase 1, 2026-10-05):** `/kpis` used to call `CustomerRepository.get_all()` with its default page size of 100, so it summarized the first 100 rows and presented them as the whole population (on this dataset: `customer_count: 100`, `overall_churn_rate: 100.0`). It now computes a single whole-table SQL aggregate (`CustomerRepository.get_kpi_aggregate()`), so `/kpis` reports the full population — 7,043 customers and a 26.54% churn rate — without materializing customer rows. `/customers` still returns one page by default; that pagination is the mentor's intentional design and was not changed. Regression coverage: `tests/test_kpi_aggregate.py` and the `/kpis` population guards in `tests/test_api.py`.
-- Existing tests did not catch that regression, and many integration tests still skip when generated database/model artifacts are absent. Historical full-suite success is not a claim of current system correctness. A clean artifact-present run in the pinned environment is now recorded in [`docs/reproduction_record.md`](docs/reproduction_record.md); **enforced CI is still open** (there is no workflow that runs the tests).
+- Many integration tests skip when generated database/model artifacts are absent, so a historical full-suite pass is not a claim of current correctness. That is now enforced by a single CI workflow, [`.github/workflows/ci.yml`](.github/workflows/ci.yml): it installs the committed pins, builds the artifacts from the tracked CSV, and then requires **zero failures and zero skips** (151 passed / 0 failed / 0 skipped in the pinned environment). **It has not produced a green run, and none is claimed**: GitHub refused to start the job — *"The job is not started because your account is locked due to a billing issue"* — so the job ran zero steps. Every step of the workflow was instead executed locally, in order, and passed (except the PowerShell smoke step, which needs a PowerShell runtime). The clean artifact-present run is recorded in [`docs/reproduction_record.md`](docs/reproduction_record.md).
 - **Reproducibility — pinned (Phase 2, 2026-10-05):** one supported runtime (CPython 3.11, `.python-version` = 3.11.2) and one pinned dependency set (`requirements.txt` + `requirements.lock.txt`) now define the environment; a second clean venv built from them froze to exactly the committed lock, and two training runs produced byte-identical reports *and* pickles. Python 3.12 — previously claimed here and in the Dockerfiles — was never run and could not be tested in this environment; the container images were aligned to `python:3.11-slim` but **no Docker build was executed**, so the container path remains documented-not-verified.
 - The endpoint verification scripts previously carried stale assertions (including pre-leakage LightGBM metrics in the shell script). They were rewritten against the current contract in Phase 1: `scripts/verify_endpoints.sh` passes **29/29** against a live API in the pinned environment and exits nonzero on a failed or missing check. `scripts/verify_endpoints.ps1` **has still never been executed** — no PowerShell runtime was available in either phase — so it is written and syntax-checked only.
-- No cloud deployment is established. The deployment workflow is disabled and no green CI claim is made. Docker/Streamlit files exist; their presence does not prove a working deployment, and the Streamlit demo is an **optional, unverified** path that no test exercises.
-- The committed Power BI screenshots are historical report captures. The refresh instructions below describe the intended local setup, not a newly verified live ODBC connection. Their **Model Predictions** page and `dashboard/business_report.md` still quote the legacy single-split metrics; that is labelled as historical in the business report, and updating the capture is Phase 5 work.
+- No cloud deployment is established. The legacy `deploy.yml` workflow — 164 lines of which 132 were comments and 32 blank, so it could never run — was removed on 2026-10-06 (recoverable from Git history at blob `e3847923`); the only workflow now is the test-only `ci.yml`. Docker/Streamlit files exist; their presence does not prove a working deployment (no Docker build was ever run here), and the Streamlit demo is an **optional, unverified** path that no test exercises.
+- The committed Power BI screenshots are report captures, not live evidence, and the refresh instructions below describe the intended local setup rather than a verified live ODBC connection. On 2026-10-06 each capture was compared with the live SQL: **`churn_drivers.jpg` is current** (every figure matched) and is featured near the top of this README; **`model_predictions.jpg` is historical** — it shows the legacy single-split five-model table, whose supersession is explained in `dashboard/business_report.md` and [`evaluation/model_comparison.md`](evaluation/model_comparison.md). No Power BI Desktop was available to re-render it, so it is labelled historical rather than refreshed.
 - **Evaluation protocol — replaced (Phase 3, 2026-10-06):** the earlier comparison trained all five models on one stratified split and picked the winner on that same holdout, with no baseline. The current protocol cross-validates the candidates plus a naive baseline on the training portion, freezes the winner, and evaluates it once on the untouched holdout. Metrics consequently changed; the legacy values remain archived and labelled. Logistic Regression still does not converge within `max_iter=1000`, which is recorded as an open problem rather than fixed, because fixing it would move the numbers again.
 - **Tenure reporting definitions — aligned (Phase 3, 2026-10-06):** `sql/analysis_queries.sql` used four tenure ranges while `view_churn_by_tenure_bucket` (the definition the committed dashboard visual renders) used three, so the same business question had two answers. The query now matches the view; the model's finer four-range `TenureBucket` feature is documented as a separate modelling input.
-- Code defects and evaluation protocols were not changed for this documentation pass, with four exceptions: the Phase 1 KPI aggregate (changes `/kpis` only), the optional `report_dir` parameter on `evaluate_all_models()` (so `pytest` cannot rewrite the tracked comparison file), the Phase 3 evaluation protocol (deliberately changes the published metrics, with the previous result archived), and the Phase 3 tenure-bucket alignment (changes the reporting query's grouping, no metric).
+- Code defects and evaluation protocols were not changed for this documentation pass, with four exceptions: the Phase 1 KPI aggregate (changes `/kpis` only), the optional `report_dir` parameter on `evaluate_all_models()` (so `pytest` cannot rewrite the tracked comparison file), the Phase 3 evaluation protocol (deliberately changes the published metrics, with the previous result archived), and the Phase 3 tenure-bucket alignment (changes the reporting query's grouping, no metric). Phases 4–5 (2026-10-06) add the CI workflow, a `TestLeakageExclusions` regression guard, and documentation corrections; they change no code behaviour beyond that.
 
 **Project work:** July-August 2026. The earlier nine-day figure was a planning target, not demonstrated elapsed delivery time.
 
@@ -44,16 +115,20 @@ The **legacy single-split result** (ROC AUC **0.8494**, accuracy **0.8020**) is 
 
 ## Table of Contents
 
-1. [Getting Started](#getting-started)
-2. [Repository Structure](#repository-structure)
-3. [Architecture](#architecture)
-4. [Team & Responsibilities](#team--responsibilities)
-5. [Milestones](#milestones)
-6. [Running the Project](#running-the-project)
-7. [Power BI Dashboard Setup](#power-bi-dashboard-setup)
-9. [Coding Standards](#coding-standards)
-10. [Data Dictionary and SQL Views](#data-dictionary-and-sql-views)
-11. [Project Process & Collaboration](#project-process--collaboration)
+1. [Problem and personal contribution](#problem-and-personal-contribution)
+2. [Architecture, quickstart and evidence at a glance](#architecture-quickstart-and-evidence-at-a-glance)
+3. [Evaluation and key finding](#evaluation-and-key-finding)
+4. [Limitations and current status](#limitations-and-current-status)
+5. [Getting Started](#getting-started)
+6. [Repository Structure](#repository-structure)
+7. [Architecture](#architecture)
+8. [Team & Responsibilities](#team--responsibilities)
+9. [Milestones](#milestones)
+10. [Running the Project](#running-the-project)
+11. [Power BI Dashboard Setup](#power-bi-dashboard-setup)
+12. [Coding Standards](#coding-standards)
+13. [Data Dictionary and SQL Views](#data-dictionary-and-sql-views)
+14. [Project Process & Collaboration](#project-process--collaboration)
 
 ---
 
@@ -172,32 +247,12 @@ This tree reflects the ETL, model training, API, dashboard, tests, and supportin
 
 ## Architecture
 
-```text
-CSV (raw customer churn dataset)
-│
-▼
-ETL Pipeline
-│
-▼
-Clean Database (SQLite)
-│
-├─────────────► SQL Analysis (views + queries)
-│
-▼
-Feature Engineering (during preprocessing)
-│
-▼
-Model Training (5 models)
-│
-▼
-Prediction Service
-│
-▼
-FastAPI (5 endpoints, API key auth)
-│
-▼
-Power BI Dashboard (documented local import/refresh setup)
-```
+The component and data-boundary diagram lives at the top of this README under
+[Architecture, quickstart and evidence at a glance](#architecture-quickstart-and-evidence-at-a-glance).
+The single most important boundary it shows: the API serves predictions from a
+persisted artifact and reports from a generated file, Power BI reads the SQL views
+and the CSV, and none of them is deployed — there is no live service tying them
+together.
 
 ### Models
 
@@ -372,7 +427,13 @@ python -m pytest
 
 ## Power BI Dashboard Setup
 
-This section documents how to set up, open, and refresh `dashboard/churn_dashboard.pbix` locally. 
+This section documents how to set up, open, and refresh `dashboard/churn_dashboard.pbix` locally.
+
+> **Status (2026-10-06):** these are the documented intended steps, written at sprint
+> end and re-verified only by inspection. No Power BI Desktop environment was
+> available during this work, so the connection/refresh behaviour below has **not**
+> been re-executed; the committed page captures are historical except
+> `churn_drivers.jpg`, which was re-verified against the live SQL views.
 
 ### Prerequisites
 
@@ -455,7 +516,7 @@ Placing this link in the Dashboard section keeps business-facing content close t
 
 - **Typing required** on all functions — use the `typing` module or built-in generics.
 - **No `print()`** — use the `logging` module for all runtime output.
-- **Tests required** for every feature — no hard coverage percentage target, but meaningful tests are expected. This is a project convention; no active CI currently enforces it.
+- **Tests required** for every feature — no hard coverage percentage target, but meaningful tests are expected. A single test-only CI workflow (`.github/workflows/ci.yml`) now enforces the artifact-present suite; see [Limitations](#limitations-and-current-status) for the caveat that GitHub Actions has not started a job for this account.
 - Pragmatic code is preferred over strict SOLID/clean-architecture adherence — clarity and correctness first.
 
 ---
