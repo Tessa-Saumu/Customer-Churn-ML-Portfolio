@@ -88,7 +88,7 @@ customer-churn-platform/
 │   ├── preprocessing.py                  # prepare_features(), build_preprocessor(), DROP_COLUMNS leakage list
 │   ├── train_test_split.py               # split_training_data() — 80/20 split, stratified, seeded
 │   ├── train_models.py                   # Trains all 5 models
-│   ├── evaluate_models.py                # Evaluates all 5 models, selects best by ROC AUC, writes model_comparison.md
+│   ├── evaluate_models.py                # Evaluation protocol: 5-fold CV selection on the training portion + baseline, then one frozen-holdout evaluation; writes model_comparison.md
 │   ├── README.md                         # Currently empty
 │   └── scripts/
 │       └── verify_pr.ps1                 # Ad hoc verification script from the Issue #11 review round

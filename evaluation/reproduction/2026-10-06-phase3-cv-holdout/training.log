@@ -1,0 +1,227 @@
+2026-10-06 01:17:14,863 INFO Splitting the dataset into the outer training/holdout portions...
+2026-10-06 01:17:14,863 INFO Preparing training data...
+2026-10-06 01:17:14,863 INFO Loading and preparing training data...
+2026-10-06 01:17:14,863 INFO Connected to database at /home/user/Customer-Churn-ML-Portfolio/database/churn.db
+2026-10-06 01:17:14,932 INFO Loaded 7043 customer records.
+2026-10-06 01:17:14,933 INFO Preparing model features....
+2026-10-06 01:17:14,933 INFO Applying feature engineering.
+2026-10-06 01:17:14,940 INFO Feature engineering complete. Dataset now has 35 columns.
+2026-10-06 01:17:14,941 INFO Prepared features with 7043 samples and 23 features.
+2026-10-06 01:17:14,942 INFO Prepared dataset with 7043 samples and 22 features.
+2026-10-06 01:17:14,942 INFO Building preprocessor...
+2026-10-06 01:17:14,943 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:14,943 INFO Splitting data into train and test sets...
+2026-10-06 01:17:14,960 INFO Training samples: 5634 | Test samples: 1409
+2026-10-06 01:17:14,960 INFO Selecting a model with 5-fold stratified cross-validation on the 5634-row training portion (holdout of 1409 rows is not used)...
+2026-10-06 01:17:14,965 INFO Built preprocessor with 22 features.
+/tmp/venv/lib/python3.11/site-packages/sklearn/linear_model/_logistic.py:599: ConvergenceWarning: lbfgs failed to converge after 1000 iteration(s) (status=1):
+STOP: TOTAL NO. OF ITERATIONS REACHED LIMIT
+
+Increase the number of iterations to improve the convergence (max_iter=1000).
+You might also want to scale the data as shown in:
+    https://scikit-learn.org/stable/modules/preprocessing.html
+Please also refer to the documentation for alternative solver options:
+    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression
+  n_iter_i = _check_optimize_result(
+2026-10-06 01:17:15,477 INFO Evaluating Logistic Regression (fold 1/5) model...
+2026-10-06 01:17:15,513 INFO Logistic Regression (fold 1/5) model evaluation complete. Accuracy: 0.8092, Precision: 0.6591, Recall: 0.5819, ROC AUC: 0.8615
+2026-10-06 01:17:15,516 INFO Built preprocessor with 22 features.
+/tmp/venv/lib/python3.11/site-packages/sklearn/linear_model/_logistic.py:599: ConvergenceWarning: lbfgs failed to converge after 1000 iteration(s) (status=1):
+STOP: TOTAL NO. OF ITERATIONS REACHED LIMIT
+
+Increase the number of iterations to improve the convergence (max_iter=1000).
+You might also want to scale the data as shown in:
+    https://scikit-learn.org/stable/modules/preprocessing.html
+Please also refer to the documentation for alternative solver options:
+    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression
+  n_iter_i = _check_optimize_result(
+2026-10-06 01:17:15,978 INFO Evaluating Logistic Regression (fold 2/5) model...
+2026-10-06 01:17:16,014 INFO Logistic Regression (fold 2/5) model evaluation complete. Accuracy: 0.7977, Precision: 0.6498, Recall: 0.5151, ROC AUC: 0.8386
+2026-10-06 01:17:16,018 INFO Built preprocessor with 22 features.
+/tmp/venv/lib/python3.11/site-packages/sklearn/linear_model/_logistic.py:599: ConvergenceWarning: lbfgs failed to converge after 1000 iteration(s) (status=1):
+STOP: TOTAL NO. OF ITERATIONS REACHED LIMIT
+
+Increase the number of iterations to improve the convergence (max_iter=1000).
+You might also want to scale the data as shown in:
+    https://scikit-learn.org/stable/modules/preprocessing.html
+Please also refer to the documentation for alternative solver options:
+    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression
+  n_iter_i = _check_optimize_result(
+2026-10-06 01:17:16,490 INFO Evaluating Logistic Regression (fold 3/5) model...
+2026-10-06 01:17:16,524 INFO Logistic Regression (fold 3/5) model evaluation complete. Accuracy: 0.8128, Precision: 0.6789, Recall: 0.5585, ROC AUC: 0.8517
+2026-10-06 01:17:16,527 INFO Built preprocessor with 22 features.
+/tmp/venv/lib/python3.11/site-packages/sklearn/linear_model/_logistic.py:599: ConvergenceWarning: lbfgs failed to converge after 1000 iteration(s) (status=1):
+STOP: TOTAL NO. OF ITERATIONS REACHED LIMIT
+
+Increase the number of iterations to improve the convergence (max_iter=1000).
+You might also want to scale the data as shown in:
+    https://scikit-learn.org/stable/modules/preprocessing.html
+Please also refer to the documentation for alternative solver options:
+    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression
+  n_iter_i = _check_optimize_result(
+2026-10-06 01:17:16,965 INFO Evaluating Logistic Regression (fold 4/5) model...
+2026-10-06 01:17:16,999 INFO Logistic Regression (fold 4/5) model evaluation complete. Accuracy: 0.8252, Precision: 0.6796, Recall: 0.6455, ROC AUC: 0.8707
+2026-10-06 01:17:17,002 INFO Built preprocessor with 22 features.
+/tmp/venv/lib/python3.11/site-packages/sklearn/linear_model/_logistic.py:599: ConvergenceWarning: lbfgs failed to converge after 1000 iteration(s) (status=1):
+STOP: TOTAL NO. OF ITERATIONS REACHED LIMIT
+
+Increase the number of iterations to improve the convergence (max_iter=1000).
+You might also want to scale the data as shown in:
+    https://scikit-learn.org/stable/modules/preprocessing.html
+Please also refer to the documentation for alternative solver options:
+    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression
+  n_iter_i = _check_optimize_result(
+2026-10-06 01:17:17,441 INFO Evaluating Logistic Regression (fold 5/5) model...
+2026-10-06 01:17:17,476 INFO Logistic Regression (fold 5/5) model evaluation complete. Accuracy: 0.8215, Precision: 0.7059, Recall: 0.5619, ROC AUC: 0.8732
+2026-10-06 01:17:17,481 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:17,545 INFO Evaluating Decision Tree (fold 1/5) model...
+2026-10-06 01:17:17,577 INFO Decision Tree (fold 1/5) model evaluation complete. Accuracy: 0.7453, Precision: 0.5196, Recall: 0.5318, ROC AUC: 0.6766
+2026-10-06 01:17:17,581 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:17,639 INFO Evaluating Decision Tree (fold 2/5) model...
+2026-10-06 01:17:17,671 INFO Decision Tree (fold 2/5) model evaluation complete. Accuracy: 0.7471, Precision: 0.5230, Recall: 0.5318, ROC AUC: 0.6778
+2026-10-06 01:17:17,675 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:17,731 INFO Evaluating Decision Tree (fold 3/5) model...
+2026-10-06 01:17:17,796 INFO Decision Tree (fold 3/5) model evaluation complete. Accuracy: 0.7542, Precision: 0.5337, Recall: 0.5819, ROC AUC: 0.7004
+2026-10-06 01:17:17,799 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:17,857 INFO Evaluating Decision Tree (fold 4/5) model...
+2026-10-06 01:17:17,890 INFO Decision Tree (fold 4/5) model evaluation complete. Accuracy: 0.7249, Precision: 0.4804, Recall: 0.4515, ROC AUC: 0.6373
+2026-10-06 01:17:17,893 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:17,950 INFO Evaluating Decision Tree (fold 5/5) model...
+2026-10-06 01:17:17,982 INFO Decision Tree (fold 5/5) model evaluation complete. Accuracy: 0.7460, Precision: 0.5219, Recall: 0.5184, ROC AUC: 0.6744
+2026-10-06 01:17:17,986 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:18,463 INFO Evaluating Random Forest (fold 1/5) model...
+2026-10-06 01:17:18,534 INFO Random Forest (fold 1/5) model evaluation complete. Accuracy: 0.7915, Precision: 0.6333, Recall: 0.5084, ROC AUC: 0.8359
+2026-10-06 01:17:18,538 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:18,995 INFO Evaluating Random Forest (fold 2/5) model...
+2026-10-06 01:17:19,068 INFO Random Forest (fold 2/5) model evaluation complete. Accuracy: 0.7862, Precision: 0.6250, Recall: 0.4849, ROC AUC: 0.8275
+2026-10-06 01:17:19,072 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:19,566 INFO Evaluating Random Forest (fold 3/5) model...
+2026-10-06 01:17:19,654 INFO Random Forest (fold 3/5) model evaluation complete. Accuracy: 0.8128, Precision: 0.6897, Recall: 0.5351, ROC AUC: 0.8418
+2026-10-06 01:17:19,658 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:20,170 INFO Evaluating Random Forest (fold 4/5) model...
+2026-10-06 01:17:20,249 INFO Random Forest (fold 4/5) model evaluation complete. Accuracy: 0.8004, Precision: 0.6492, Recall: 0.5385, ROC AUC: 0.8387
+2026-10-06 01:17:20,252 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:20,752 INFO Evaluating Random Forest (fold 5/5) model...
+2026-10-06 01:17:20,824 INFO Random Forest (fold 5/5) model evaluation complete. Accuracy: 0.8037, Precision: 0.6726, Recall: 0.5084, ROC AUC: 0.8543
+2026-10-06 01:17:20,830 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:20,935 INFO Evaluating XGBoost (fold 1/5) model...
+2026-10-06 01:17:20,974 INFO XGBoost (fold 1/5) model evaluation complete. Accuracy: 0.7773, Precision: 0.5916, Recall: 0.5184, ROC AUC: 0.8342
+2026-10-06 01:17:20,978 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:21,083 INFO Evaluating XGBoost (fold 2/5) model...
+2026-10-06 01:17:21,119 INFO XGBoost (fold 2/5) model evaluation complete. Accuracy: 0.7631, Precision: 0.5611, Recall: 0.4916, ROC AUC: 0.8272
+2026-10-06 01:17:21,123 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:21,235 INFO Evaluating XGBoost (fold 3/5) model...
+2026-10-06 01:17:21,275 INFO XGBoost (fold 3/5) model evaluation complete. Accuracy: 0.7986, Precision: 0.6364, Recall: 0.5619, ROC AUC: 0.8420
+2026-10-06 01:17:21,279 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:21,399 INFO Evaluating XGBoost (fold 4/5) model...
+2026-10-06 01:17:21,438 INFO XGBoost (fold 4/5) model evaluation complete. Accuracy: 0.7888, Precision: 0.6093, Recall: 0.5686, ROC AUC: 0.8432
+2026-10-06 01:17:21,442 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:21,559 INFO Evaluating XGBoost (fold 5/5) model...
+2026-10-06 01:17:21,610 INFO XGBoost (fold 5/5) model evaluation complete. Accuracy: 0.7940, Precision: 0.6438, Recall: 0.5017, ROC AUC: 0.8469
+2026-10-06 01:17:21,615 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:21,741 INFO Evaluating LightGBM (fold 1/5) model...
+2026-10-06 01:17:21,786 INFO LightGBM (fold 1/5) model evaluation complete. Accuracy: 0.7950, Precision: 0.6405, Recall: 0.5184, ROC AUC: 0.8537
+2026-10-06 01:17:21,789 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:21,907 INFO Evaluating LightGBM (fold 2/5) model...
+2026-10-06 01:17:21,955 INFO LightGBM (fold 2/5) model evaluation complete. Accuracy: 0.7870, Precision: 0.6224, Recall: 0.5017, ROC AUC: 0.8395
+2026-10-06 01:17:21,960 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:22,078 INFO Evaluating LightGBM (fold 3/5) model...
+2026-10-06 01:17:22,123 INFO LightGBM (fold 3/5) model evaluation complete. Accuracy: 0.7968, Precision: 0.6357, Recall: 0.5485, ROC AUC: 0.8501
+2026-10-06 01:17:22,127 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:22,242 INFO Evaluating LightGBM (fold 4/5) model...
+2026-10-06 01:17:22,295 INFO LightGBM (fold 4/5) model evaluation complete. Accuracy: 0.7977, Precision: 0.6381, Recall: 0.5485, ROC AUC: 0.8587
+2026-10-06 01:17:22,299 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:22,421 INFO Evaluating LightGBM (fold 5/5) model...
+2026-10-06 01:17:22,471 INFO LightGBM (fold 5/5) model evaluation complete. Accuracy: 0.8046, Precision: 0.6653, Recall: 0.5318, ROC AUC: 0.8569
+2026-10-06 01:17:22,476 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:22,509 INFO Evaluating DummyClassifier (baseline) (fold 1/5) model...
+2026-10-06 01:17:22,541 INFO DummyClassifier (baseline) (fold 1/5) model evaluation complete. Accuracy: 0.7347, Precision: 0.0000, Recall: 0.0000, ROC AUC: 0.5000
+2026-10-06 01:17:22,544 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:22,576 INFO Evaluating DummyClassifier (baseline) (fold 2/5) model...
+2026-10-06 01:17:22,609 INFO DummyClassifier (baseline) (fold 2/5) model evaluation complete. Accuracy: 0.7347, Precision: 0.0000, Recall: 0.0000, ROC AUC: 0.5000
+2026-10-06 01:17:22,612 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:22,644 INFO Evaluating DummyClassifier (baseline) (fold 3/5) model...
+2026-10-06 01:17:22,677 INFO DummyClassifier (baseline) (fold 3/5) model evaluation complete. Accuracy: 0.7347, Precision: 0.0000, Recall: 0.0000, ROC AUC: 0.5000
+2026-10-06 01:17:22,680 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:22,713 INFO Evaluating DummyClassifier (baseline) (fold 4/5) model...
+2026-10-06 01:17:22,746 INFO DummyClassifier (baseline) (fold 4/5) model evaluation complete. Accuracy: 0.7347, Precision: 0.0000, Recall: 0.0000, ROC AUC: 0.5000
+2026-10-06 01:17:22,749 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:22,781 INFO Evaluating DummyClassifier (baseline) (fold 5/5) model...
+2026-10-06 01:17:22,814 INFO DummyClassifier (baseline) (fold 5/5) model evaluation complete. Accuracy: 0.7345, Precision: 0.0000, Recall: 0.0000, ROC AUC: 0.5000
+2026-10-06 01:17:22,816 INFO Best model: Logistic Regression (mean CV ROC AUC 0.8591, fold std 0.0142)
+2026-10-06 01:17:22,816 INFO Refitting Logistic Regression on the full training portion...
+2026-10-06 01:17:22,817 INFO Built preprocessor with 22 features.
+/tmp/venv/lib/python3.11/site-packages/sklearn/linear_model/_logistic.py:599: ConvergenceWarning: lbfgs failed to converge after 1000 iteration(s) (status=1):
+STOP: TOTAL NO. OF ITERATIONS REACHED LIMIT
+
+Increase the number of iterations to improve the convergence (max_iter=1000).
+You might also want to scale the data as shown in:
+    https://scikit-learn.org/stable/modules/preprocessing.html
+Please also refer to the documentation for alternative solver options:
+    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression
+  n_iter_i = _check_optimize_result(
+2026-10-06 01:17:23,372 INFO Fitting the DummyClassifier (baseline) baseline on the same training portion...
+2026-10-06 01:17:23,373 INFO Built preprocessor with 22 features.
+2026-10-06 01:17:23,412 INFO Evaluating the frozen winner and the baseline once on the untouched holdout (1409 rows)...
+2026-10-06 01:17:23,412 INFO Evaluating Logistic Regression model...
+2026-10-06 01:17:23,447 INFO Logistic Regression model evaluation complete. Accuracy: 0.7991, Precision: 0.6435, Recall: 0.5455, ROC AUC: 0.8496
+2026-10-06 01:17:23,447 INFO Evaluating DummyClassifier (baseline) model...
+2026-10-06 01:17:23,481 INFO DummyClassifier (baseline) model evaluation complete. Accuracy: 0.7346, Precision: 0.0000, Recall: 0.0000, ROC AUC: 0.5000
+2026-10-06 01:17:23,484 INFO Best model (Logistic Regression) saved successfully.
+2026-10-06 01:17:23,484 INFO Evaluation complete.
+                   model_name  accuracy  ...   roc_auc          confusion_matrix
+0         Logistic Regression  0.799148  ...  0.849562  [[922, 113], [170, 204]]
+1  DummyClassifier (baseline)  0.734564  ...  0.500000     [[1035, 0], [374, 0]]
+
+[2 rows x 6 columns]
+2026-10-06 01:17:23,490 INFO Writing model comparison report to evaluation/model_comparison.md
+2026-10-06 01:17:23,503 INFO 
+                   model_name  accuracy  ...  n_folds           confusion_matrix
+0         Logistic Regression  0.813278  ...        5  [[3726, 413], [639, 856]]
+1               Decision Tree  0.743522  ...        5  [[3407, 732], [713, 782]]
+2               Random Forest  0.798900  ...        5  [[3731, 408], [725, 770]]
+3                     XGBoost  0.784347  ...        5  [[3629, 510], [705, 790]]
+4                    LightGBM  0.796239  ...        5  [[3694, 445], [703, 792]]
+5  DummyClassifier (baseline)  0.734647  ...        5     [[4139, 0], [1495, 0]]
+
+[6 rows x 9 columns]
+[LightGBM] [Info] Number of positive: 1196, number of negative: 3311
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.000514 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 941
+[LightGBM] [Info] Number of data points in the train set: 4507, number of used features: 52
+[LightGBM] [Info] [binary:BoostFromScore]: pavg=0.265365 -> initscore=-1.018268
+[LightGBM] [Info] Start training from score -1.018268
+[LightGBM] [Info] Number of positive: 1196, number of negative: 3311
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.000450 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 941
+[LightGBM] [Info] Number of data points in the train set: 4507, number of used features: 52
+[LightGBM] [Info] [binary:BoostFromScore]: pavg=0.265365 -> initscore=-1.018268
+[LightGBM] [Info] Start training from score -1.018268
+[LightGBM] [Info] Number of positive: 1196, number of negative: 3311
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.000469 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 941
+[LightGBM] [Info] Number of data points in the train set: 4507, number of used features: 52
+[LightGBM] [Info] [binary:BoostFromScore]: pavg=0.265365 -> initscore=-1.018268
+[LightGBM] [Info] Start training from score -1.018268
+[LightGBM] [Info] Number of positive: 1196, number of negative: 3311
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.000401 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 941
+[LightGBM] [Info] Number of data points in the train set: 4507, number of used features: 52
+[LightGBM] [Info] [binary:BoostFromScore]: pavg=0.265365 -> initscore=-1.018268
+[LightGBM] [Info] Start training from score -1.018268
+[LightGBM] [Info] Number of positive: 1196, number of negative: 3312
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.000448 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 941
+[LightGBM] [Info] Number of data points in the train set: 4508, number of used features: 52
+[LightGBM] [Info] [binary:BoostFromScore]: pavg=0.265306 -> initscore=-1.018570
+[LightGBM] [Info] Start training from score -1.018570

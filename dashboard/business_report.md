@@ -1,5 +1,19 @@
 # Customer Churn Dashboard Business Report
 
+> **Post-sprint note (2026-10-06, portfolio owner — not part of Joyce's original report).**
+> The model figures in section 5 are the **legacy single-split** result and are kept
+> as the historical record of the leakage-corrected evaluation this report announced.
+> Phase 3 replaced the evaluation protocol (training-side cross-validation for
+> selection, one frozen holdout evaluation, plus a naive baseline), so the current
+> numbers differ: Logistic Regression on the untouched holdout is accuracy 0.7991 /
+> precision 0.6435 / recall 0.5455 / ROC AUC 0.8496, against a prior baseline whose
+> ROC AUC is 0.5. See [`evaluation/model_comparison.md`](../evaluation/model_comparison.md)
+> and [`docs/reproduction_record.md`](../docs/reproduction_record.md) §12. The
+> recommendations below are unaffected — the recall caveat still applies. The
+> committed Power BI screenshot of the Model Predictions page shows the legacy
+> values; it has not been refreshed (no Power BI Desktop here) and is labelled
+> historical in `README.md`.
+
 ## Project Overview
 
 This report summarizes the key findings from the Customer Churn Power BI Dashboard developed as part of the Customer Churn Prediction BI Platform project.
@@ -111,7 +125,12 @@ Five machine learning models were evaluated for customer churn prediction.
 - XGBoost
 - LightGBM
 
-Following the corrected model evaluation (produced after a data leakage issue in the training pipeline was identified and fixed during API integration), **Logistic Regression** was selected as the production model.
+Following the corrected model evaluation (produced after a data leakage issue in the training pipeline was identified and fixed during API integration), **Logistic Regression** was selected as the report's model.
+
+> **Post-sprint note:** "was selected as the production model" described a locally
+> served artifact, not a deployment — the project was never deployed. The figures in
+> the table below are the legacy single-split evaluation; see the note at the top of
+> this report.
 
 ### Selected Model Performance
 
@@ -122,7 +141,7 @@ Following the corrected model evaluation (produced after a data leakage issue in
 | Recall | **55.62%** |
 | ROC AUC | **84.94%** |
 
-> **Note on this update:** an earlier version of this report cited a Logistic Regression evaluation of 91.77% accuracy / 97.43% ROC AUC. Those figures came from a stale evaluation run affected by data leakage in the training pipeline, discovered during real model integration (Issue #14). The figures above reflect the corrected evaluation and are the ones the production model and this dashboard now use.
+> **Note on this update:** an earlier version of this report cited a Logistic Regression evaluation of 91.77% accuracy / 97.43% ROC AUC. Those figures came from a stale evaluation run affected by data leakage in the training pipeline, discovered during real model integration (Issue #14). **Historically**, the figures above reflected the corrected evaluation; since Phase 3 (2026-10-06) they are the legacy single-split figures, and the current protocol's untouched-holdout values are in [`evaluation/model_comparison.md`](../evaluation/model_comparison.md).
 
 The selected model's predictive performance is more modest than the pre-correction figures suggested, particularly on recall (55.62%), meaning a meaningful share of customers who do churn will not be flagged by the model. It should be used as one input among several for identifying at-risk customers, not as a sole determinant, until further tuning or feature work improves recall.
 

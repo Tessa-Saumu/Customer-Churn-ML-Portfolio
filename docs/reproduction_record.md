@@ -1,12 +1,19 @@
-# Reproduction Record — pinned environment, 2026-10-05
+# Reproduction Record — pinned environment
 
-**Phase:** 2 (audit items FGA-03 and FGA-07) of `FLAGSHIP_IMPLEMENTATION_PLAN.md`.
+**Sections 1–11:** Phase 2, 2026-10-05 (audit items FGA-03 and FGA-07).
+**Section 12:** Phase 3, 2026-10-06 (audit items FGA-05 and FGA-06) — the current,
+superseding evaluation protocol and its results. Where the two disagree, §12 is
+current and §§4–8 are the Phase 2 record being described.
 **What this document is:** the single authoritative record of *one* supported
 runtime, *one* pinned dependency set, the exact input, the exact commands, and the
-result they produced — so a reviewer can tell whether a changed metric is a bug or
-package drift.
-**What it is not:** a new headline result. The repository's published metrics are
-unchanged; see [§8 What is canonical after Phase 2](#8-what-is-canonical-after-phase-2).
+results they produced — so a reviewer can tell whether a changed metric is a bug, a
+protocol change, or package drift.
+**How to read it:** §§1–11 describe the Phase 2 pinned re-run of the *legacy*
+single-split protocol, whose published values were then still what the repository
+reported. Phase 3 replaced that protocol (§12), so the numbers in §§6 and 8 are now
+the archived predecessors, kept because they are the pinned baseline the new
+protocol is compared against. [§12](#12-phase-3--current-evaluation-protocol-and-results)
+is the current result.
 
 ---
 
@@ -73,9 +80,9 @@ too.
 | Size / shape | 1,736,765 bytes · 7,044 lines (1 header + 7,043 rows) · 33 columns · LF |
 | Source, version and rights | [`docs/data_provenance.md`](data_provenance.md) — redistribution rights **unconfirmed**, retention decision recorded there |
 
-## 4. Protocol as run (unchanged from the legacy result)
+## 4. Protocol as run in Phase 2 (superseded in Phase 3 — see §12)
 
-Phase 2 does not change the modelling protocol; Phase 3 does. What ran:
+Phase 2 did not change the modelling protocol; Phase 3 did. What ran:
 
 - `training/preprocessing.py` — target `churn_value`; `churn_score`, `churn_reason`,
   `cltv`, `customer_id`, geography and the text label dropped (leakage-free);
@@ -162,7 +169,7 @@ result that becomes current.
 So: with the pins in place, this pipeline is bit-reproducible *in this environment*.
 That is a narrower claim than "reproducible everywhere" — see §9.
 
-## 8. What is canonical after Phase 2
+## 8. What was canonical after Phase 2 (superseded by §12)
 
 | Artifact | State |
 |---|---|
@@ -172,14 +179,15 @@ That is a narrower claim than "reproducible everywhere" — see §9.
 | `models/best_model.pkl` | Gitignored, generated. After this record's run it holds the **pinned** Logistic Regression fit (accuracy 0.799148). |
 | `database/churn.db` | Gitignored, generated: 7,043 rows, `customers` table, both views. |
 
-**Known consequence, recorded not hidden (backlog NEW-03).** `/model-metrics` reads
-the tracked legacy report (0.8020 / 0.8494) while `/predict` serves a pickle whose
-own held-out score in the pinned environment is 0.7991 / 0.8496. Nothing asserts the
-two agree. This mismatch predates Phase 2 — any local retrain caused it — but it is
-now *measured*, and Phase 2 deliberately does not resolve it by republishing drifted
-numbers as current. Phase 3 closes it by regenerating the canonical report and the
-pickle together under the new protocol (audit FGA-05; FGA-09 would additionally give
-the API a structured source).
+**Known consequence, recorded not hidden (backlog NEW-03 — resolved in §12).**
+`/model-metrics` read the tracked legacy report (0.8020 / 0.8494) while `/predict`
+served a pickle whose own held-out score in the pinned environment was
+0.7991 / 0.8496. Nothing asserted the two agreed. This mismatch predates Phase 2 —
+any local retrain caused it — but Phase 2 measured rather than hid it, and refused to
+resolve it by republishing drifted numbers as current. Phase 3 closed it: the report
+and the pickle are now written by the same run, from the same protocol, and the
+report's numbers are that run's untouched-holdout scores for exactly that fitted
+model.
 
 Data-level cross-checks from the same run (independent of the model):
 
@@ -279,3 +287,115 @@ API_KEY=<your-key-from-.env> ./scripts/verify_endpoints.sh
 Step 3 leaves `evaluation/model_comparison.md` modified — that is expected, it is the
 legacy protocol's output in your environment, and step 4 restores the committed file.
 `pytest` does **not** modify it (see §7).
+
+---
+
+## 12. Phase 3 — current evaluation protocol and results
+
+**Completed:** 2026-10-06. Audit items **FGA-05** (baseline + selection/final-evaluation
+boundary) and **FGA-06** (tenure-bucket definitions). Environment: exactly the Phase 2
+runtime and pins from §§1–2 (CPython 3.11.2, `requirements.txt` + `requirements.lock.txt`),
+the same tracked input (§3), unchanged seed `42`.
+
+### What changed, and why the numbers moved
+
+| | Legacy (archived) | Current |
+|---|---|---|
+| Candidates | 5, default hyperparameters | **same 5, same definitions** (`build_candidate_models()`) |
+| Baseline | none | `DummyClassifier(strategy="prior")`, scored in the same folds |
+| Selection | highest ROC AUC **on the holdout** | highest **mean 5-fold CV ROC AUC on the training portion** |
+| Final estimate | the same holdout that picked the winner | the winner refitted on the full training portion, scored **once** on the untouched holdout |
+| Reported ROC AUC | 0.8494 (single split, selected-on-test) | **0.8496** (untouched holdout) |
+| Reported accuracy | 0.8020 | **0.7991** |
+
+The metric *definitions* did not change and the fitted winner did not change (Logistic
+Regression under both protocols — `models/best_model.pkl` is byte-identical to the Phase 2
+pinned pickle, `7f545337…`). What changed is which data the reported number comes from, so
+the small deltas are a protocol change, not drift. **The two values are not directly
+comparable**, and the archived legacy number must not be presented as an untouched final
+estimate.
+
+### Result (current, pinned environment)
+
+| Model | Setting | Accuracy | Precision | Recall | ROC AUC | Confusion matrix |
+|---|---|---|---|---|---|---|
+| LOGISTIC REGRESSION (selected) | untouched holdout (1,409 rows) | **0.799148** | **0.643533** | **0.545455** | **0.849562** | `[[922, 113], [170, 204]]` |
+| DummyClassifier (prior baseline) | untouched holdout | 0.734564 | 0.0 | 0.0 | 0.5 | `[[1035, 0], [374, 0]]` |
+
+Selection table (means over 5 stratified folds of the 5,634-row training portion;
+`roc_auc_std` is the sample standard deviation of the fold values):
+
+| Model | Accuracy | Precision | Recall | ROC AUC | std | Fold ROC AUC (in fold order) |
+|---|---|---|---|---|---|---|
+| Logistic Regression | 0.813278 | 0.674640 | 0.572575 | **0.859133** | 0.014245 | 0.8615, 0.8386, 0.8517, 0.8707, 0.8732 |
+| LightGBM | 0.796239 | 0.640393 | 0.529766 | 0.851774 | 0.007578 | 0.8537, 0.8395, 0.8501, 0.8587, 0.8569 |
+| Random Forest | 0.798900 | 0.653950 | 0.515050 | 0.839627 | 0.009758 | 0.8359, 0.8275, 0.8418, 0.8387, 0.8543 |
+| XGBoost | 0.784347 | 0.608426 | 0.528428 | 0.838703 | 0.007922 | 0.8342, 0.8272, 0.8420, 0.8432, 0.8469 |
+| Decision Tree | 0.743522 | 0.515738 | 0.523077 | 0.673281 | 0.022721 | 0.6766, 0.6778, 0.7004, 0.6373, 0.6744 |
+| DummyClassifier (baseline) | 0.734647 | 0.0 | 0.0 | 0.5 | 0.0 | 0.5 ×5 |
+
+**Honest reading.** Logistic Regression still wins, but by ~0.007 mean CV ROC AUC over
+LightGBM with overlapping fold ranges (std ~0.014 vs ~0.008) — this is **not** evidence of
+a meaningful advantage over the runner-up. The model does clear the naive floor
+(0.859 vs 0.5 mean CV ROC AUC; 0.850 vs 0.5 on the holdout), and it is better than always
+predicting the majority class on every reported metric. Recall remains ~55%, i.e. ~45% of
+actual churners are still missed. No tuning was attempted to improve this; per the plan's
+stop conditions, that is the acceptable outcome of a prespecified protocol.
+
+### Determinism and provenance (verified)
+
+| Check | Result |
+|---|---|
+| Two consecutive CLI runs of `training/evaluate_models.py` | `evaluation/model_comparison.md` **byte-identical** (`e035eb78…` both times) |
+| `models/best_model.pkl` | byte-identical across CLI runs (`7f545337…`) — and identical to the Phase 2 pinned pickle, because the winner and its fitting rows are unchanged. **Caveat (NEW-20):** a full `pytest` run writes a byte-different file (`4551c820…`, 8,017 vs 8,001 bytes) that loads to the *same* model — holdout accuracy `0.799148332`, ROC AUC `0.849562117`, same `n_iter_`, same coefficient sum. The difference is pickle memoization of a numpy `dtype` object, i.e. object identity under different process histories, not a different fit. Compare this artifact within one execution path only; the report is byte-reproducible in both |
+| A third run, captured to `evaluation/reproduction/2026-10-06-phase3-cv-holdout/training.log` | report and CSV **unchanged** (re-hashed after the run) |
+| CSV regeneration from the new report | LF-only output (NEW-10 fixed by an explicit `lineterminator="\n"`), values derived from the report's selection table |
+| Report contents | protocol, seeds, fold count, candidate list, baseline, target, exclusions, engineered features, input SHA-256, package versions and limits are all written by the code (`write_comparison_report`), not by hand |
+| A fresh process calling `evaluate_all_models(report_dir=…)` | report **byte-identical** to the tracked one (`e035eb78…`) — the reproducibility claim is not just "same process twice" |
+| CSV generation | `scripts/generate_model_comparison_csv.py` reproduces the committed CSV **byte-for-byte** (LF endings), and a test asserts it |
+| Negative controls | 9 deliberate breaks of the new guarantees (holdout-shaped parameter, CV widened to all rows, fake/eligible baseline, report's first metric block switched to CV means, old four-range SQL, moved view boundary, CRLF in the CSV, CRLF restored in the generator) were each applied in a scratch copy and each made its guard fail. One of them initially *passed*, exposing a vacuous line-ending assertion in a new test; the guard was rewritten to check raw bytes and re-verified. Detail in `FLAGSHIP_IMPLEMENTATION_PLAN.md`'s Phase 3 record |
+
+### Files changed in Phase 3
+
+- `training/evaluate_models.py` — new protocol: `cross_validate_model()`,
+  `select_best_model()`, `write_comparison_report()`; `evaluate_all_models()` now runs
+  split → CV selection → refit → single holdout evaluation and writes the report and the
+  pickle from the same run. `evaluate_model()` gained `zero_division=0` for precision
+  (no value changes for a model that predicts positives; it only stops the baseline
+  emitting an undefined-metric warning).
+- `training/train_models.py` — `build_candidate_models()`, `build_baseline_model()`,
+  `build_pipeline()` extracted; the five candidate definitions are unchanged.
+- `scripts/generate_model_comparison_csv.py` — reads the report's `## Model selection`
+  table; LF output; CLI output-path argument for tests.
+- `tests/test_models.py` — 11 new tests (selection-cannot-see-the-holdout,
+  protocol properties, report contract) + the end-to-end test updated to the new
+  return shape. `tests/test_reproducibility.py` — metric-guard tests re-pointed at the
+  new canonical arrangement (legacy archive frozen by hash, tracked report is the
+  current protocol, CSV matches the report). `tests/test_sql_views.py` — 5 new
+  tenure-boundary/consistency tests.
+- `sql/analysis_queries.sql`, `docs/data_dictionary.md`, `docs/sql_analysis_summary.md`
+  — reporting tenure grouping aligned to the view; the modelling feature documented as a
+  separate, deliberately finer definition (FGA-06).
+- `evaluation/model_comparison.md` (+ `.csv`), `evaluation/legacy/README.md`,
+  `evaluation/reproduction/2026-10-06-phase3-cv-holdout/` (log + label), `README.md`,
+  `dashboard/business_report.md` (dated note), `scripts/verify_endpoints.sh/.ps1`
+  (stale comment only).
+
+### Verification runs (Phase 3, this environment)
+
+| Run | Result |
+|---|---|
+| Full suite, artifacts present | **148 passed / 0 failed** in ~40 s (was 130 before this phase) |
+| Per file | `test_api` 34 · `test_etl` 28 · `test_kpi_aggregate` 12 · `test_models` 33 · `test_reproducibility` 29 · `test_sql_views` 12 |
+| Markers | `-m unit` → 65 passed · `-m integration` → 83 passed |
+| Tracked metrics after the full suite | **unchanged** (report `e035eb78…`, CSV `12958fb0…`) — the API/CSV couplings are pinned by tests rather than by "hope" |
+| Live `/model-metrics` | `{accuracy: 0.7991, precision: 0.6435, recall: 0.5455, roc_auc: 0.8496}` — the report's first metric block, i.e. the untouched-holdout values (was `0.802/0.648/0.5561/0.8494` from the legacy report) |
+| Live `/predict` | unchanged behaviour; the served pickle is byte-identical to the Phase 2 one |
+| `scripts/verify_endpoints.sh` | 29 passed / 0 failed, exit 0 (report-consistency check now compares against the new report) |
+| Full suite, fresh state (no `database/churn.db`, no `models/`) | **66 passed / 82 skipped / 0 failed**; the new tenure-boundary and report-contract guards run in this state, and both tracked metrics files were re-hashed as unchanged afterwards |
+| `ruff check` 0.16.10 (ad-hoc, no linter configured) | files this phase rewrote are clean; repo-wide unchanged |
+
+**Not run, therefore not claimed:** `scripts/verify_endpoints.ps1` (no PowerShell runtime —
+unchanged from Phases 1–2) and any Docker build (no daemon). Power BI Desktop is not
+available, so the dashboard's Model Predictions page was not refreshed; `README.md` and
+`dashboard/business_report.md` label that capture historical.
