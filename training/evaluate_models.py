@@ -67,9 +67,24 @@ def evaluate_model(
     }
     
 # Define a function to evaluate all models
-def evaluate_all_models() -> pd.DataFrame:
+def evaluate_all_models(report_dir: Path | str | None = None) -> pd.DataFrame:
     """
     Train and evaluate all models, returning a DataFrame with evaluation metrics.
+
+    report_dir
+        Directory that `model_comparison.md` is written to. The default (None)
+        keeps the historical behaviour: `Path("evaluation")`, resolved against
+        the current working directory -- i.e. run this from the repo root, as
+        the README documents.
+
+        ADDED 2026-10-05 (Phase 2 / FGA-03): the parameter exists so the test
+        suite can redirect the report into a temporary directory. Before this,
+        `pytest` alone rewrote the *tracked* `evaluation/model_comparison.md`
+        with whatever the local environment happened to produce, so a reviewer
+        running the tests saw a modified metrics file they had not asked for
+        (recorded as NEW-02 in FLAGSHIP_IMPLEMENTATION_PLAN.md). The model
+        pickle is still written to `models/` (gitignored, and reloaded by the
+        next test on purpose).
     """
     logger.info("Training models...")
     trained_models, X_test, y_test = train_models()
@@ -107,9 +122,10 @@ def evaluate_all_models() -> pd.DataFrame:
     logger.info("Evaluation complete.\n%s", results_df)
 
     # Generate a markdown report for model comparison
-    REPORT_DIR = Path("evaluation")
-    REPORT_DIR.mkdir(exist_ok=True)
+    REPORT_DIR = Path(report_dir) if report_dir is not None else Path("evaluation")
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
     report_path = REPORT_DIR / "model_comparison.md"
+    logger.info("Writing model comparison report to %s", report_path)
     with report_path.open("w", encoding="utf-8") as file:
         file.write("# Customer Churn Model Comparison\n\n")
         file.write(results_df.to_markdown(index=False))

@@ -40,11 +40,18 @@ database/*.sqlite
 database/*.sqlite3
 *.db-journal
 
-# --- Raw / large data (regenerate via ETL, don't commit) ---
-data/raw/*.csv
-data/raw/
-data/raw/*.xlsx
-!data/raw/.gitkeep
+# --- Raw / large data ---
+# `data/raw/telco_churn_raw.csv` IS tracked on purpose: it is the reproduction
+# input for the whole pipeline, and `git check-ignore` must not claim otherwise.
+# Its source, checksum and redistribution status are documented in
+# docs/data_provenance.md. Everything else dropped into data/raw/ (Kaggle
+# downloads, .xlsx workbooks, ad-hoc exports) stays out of Git.
+#
+# NOTE: the previous rules (`data/raw/*.csv`, `data/raw/`) ignored the tracked
+# CSV and also made the `!data/raw/.gitkeep` negation inert — Git never descends
+# into an ignored directory, so a negation below it cannot re-include a file.
+data/raw/*
+!data/raw/telco_churn_raw.csv
 
 # --- Testing ---
 .pytest_cache/
@@ -86,6 +93,10 @@ desktop.ini
 # --- Logs ---
 *.log
 logs/
+# Exception: the reproduction archive commits the training log its recorded metrics
+# came from -- provenance evidence for docs/reproduction_record.md, described in
+# evaluation/reproduction/*/README.md, not a runtime log. Keep the pattern narrow.
+!evaluation/reproduction/*/training.log
 
 # --- Models ---
 models/

@@ -1,15 +1,47 @@
-pandas
-numpy
-scikit-learn
-xgboost
-lightgbm
-joblib
+# Python dependencies — Customer Churn Prediction & BI Platform
+#
+# SUPPORTED RUNTIME: CPython 3.11 (verified end-to-end on 3.11.2, Linux x86_64,
+# 2026-10-05). See `.python-version` and the README "Prerequisites" section.
+# The recorded environment, input checksum, commands and results are in
+# `docs/reproduction_record.md`.
+#
+# Every direct dependency below is pinned to the exact version that was verified
+# through the whole local path (ETL -> training/evaluation -> API -> full test
+# suite -> endpoint smoke checks). The `-c` line pulls in `requirements.lock.txt`,
+# which pins the complete transitive closure from that same verified environment,
+# so `pip install -r requirements.txt` resolves deterministically.
+#
+# WHY PINNED (do not relax without re-running the pipeline and recording a new
+# reproduction): FLAGSHIP_GAP_AUDIT.md item FGA-03 records that unpinned
+# dependencies moved the reported model metrics between environments — the same
+# protocol produced Logistic Regression ROC AUC 0.8494 in one environment and
+# 0.8496 in another, and XGBoost accuracy 0.790632 vs 0.784244. Pinning is what
+# makes a reproduced metric interpretable as a result rather than as drift.
 
-fastapi
-uvicorn[standard]
-python-dotenv
-sqlalchemy
-pytest
-httpx
-tabulate
-streamlit
+-c requirements.lock.txt
+
+# --- Data / ML pipeline (etl/, training/, predict.py) ---
+pandas==3.0.6
+numpy==2.4.6
+scikit-learn==1.9.1
+xgboost==3.2.0
+lightgbm==4.7.0
+joblib==1.6.0
+tabulate==0.10.0              # DataFrame.to_markdown() in training/evaluate_models.py
+
+# --- API service (app/) ---
+fastapi==0.142.2
+uvicorn[standard]==0.54.0
+python-dotenv==1.2.4
+sqlalchemy==2.1.3             # database/models.py — present, not used in the request path
+
+# --- Tests (tests/) ---
+pytest==9.1.1
+httpx==0.28.1                 # required by fastapi.testclient.TestClient
+
+# --- Optional local demo (streamlit-app.py) ---
+# NOT part of the verified training/API path and not exercised by the test suite.
+# See README "Optional: Streamlit demo" — labelled optional/unverified there.
+streamlit==1.65.0
+requests==2.34.2              # imported directly by streamlit-app.py; was previously
+                              # only present transitively via streamlit

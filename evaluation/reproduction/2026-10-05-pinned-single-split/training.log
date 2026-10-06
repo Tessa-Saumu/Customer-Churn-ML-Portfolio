@@ -1,0 +1,86 @@
+2026-10-05 22:20:01,736 INFO Training models...
+2026-10-05 22:20:01,736 INFO Splitting training data...
+2026-10-05 22:20:01,737 INFO Preparing training data...
+2026-10-05 22:20:01,737 INFO Loading and preparing training data...
+2026-10-05 22:20:01,737 INFO Connected to database at /home/user/Customer-Churn-ML-Portfolio/database/churn.db
+2026-10-05 22:20:01,808 INFO Loaded 7043 customer records.
+2026-10-05 22:20:01,808 INFO Preparing model features....
+2026-10-05 22:20:01,808 INFO Applying feature engineering.
+2026-10-05 22:20:01,815 INFO Feature engineering complete. Dataset now has 35 columns.
+2026-10-05 22:20:01,816 INFO Prepared features with 7043 samples and 23 features.
+2026-10-05 22:20:01,817 INFO Prepared dataset with 7043 samples and 22 features.
+2026-10-05 22:20:01,818 INFO Building preprocessor...
+2026-10-05 22:20:01,818 INFO Built preprocessor with 22 features.
+2026-10-05 22:20:01,818 INFO Splitting data into train and test sets...
+2026-10-05 22:20:01,835 INFO Training samples: 5634 | Test samples: 1409
+2026-10-05 22:20:01,835 INFO Training Logistic Regression model...
+/tmp/venv-pinned/lib/python3.11/site-packages/sklearn/linear_model/_logistic.py:599: ConvergenceWarning: lbfgs failed to converge after 1000 iteration(s) (status=1):
+STOP: TOTAL NO. OF ITERATIONS REACHED LIMIT
+
+Increase the number of iterations to improve the convergence (max_iter=1000).
+You might also want to scale the data as shown in:
+    https://scikit-learn.org/stable/modules/preprocessing.html
+Please also refer to the documentation for alternative solver options:
+    https://scikit-learn.org/stable/modules/linear_model.html#logistic-regression
+  n_iter_i = _check_optimize_result(
+2026-10-05 22:20:02,470 INFO Logistic Regression model training complete.
+2026-10-05 22:20:02,470 INFO Logistic Regression added to trained models.
+2026-10-05 22:20:02,470 INFO Training Decision Tree model...
+2026-10-05 22:20:02,555 INFO Decision Tree model training complete.
+2026-10-05 22:20:02,555 INFO Decision Tree added to trained models.
+2026-10-05 22:20:02,555 INFO Training Random Forest model...
+2026-10-05 22:20:03,180 INFO Random Forest model training complete.
+2026-10-05 22:20:03,180 INFO Random Forest added to trained models.
+2026-10-05 22:20:03,180 INFO Training XGBoost model...
+2026-10-05 22:20:03,315 INFO XGBoost model training complete.
+2026-10-05 22:20:03,316 INFO XGBoost added to trained models.
+2026-10-05 22:20:03,316 INFO Training LightGBM model...
+2026-10-05 22:20:03,475 INFO LightGBM model training complete.
+2026-10-05 22:20:03,475 INFO LightGBM added to trained models.
+2026-10-05 22:20:03,476 INFO Evaluating Logistic Regression model...
+2026-10-05 22:20:03,512 INFO Logistic Regression model evaluation complete. Accuracy: 0.7991, Precision: 0.6435, Recall: 0.5455, ROC AUC: 0.8496
+2026-10-05 22:20:03,512 INFO Evaluating Decision Tree model...
+2026-10-05 22:20:03,548 INFO Decision Tree model evaluation complete. Accuracy: 0.7317, Precision: 0.4947, Recall: 0.5027, ROC AUC: 0.6583
+2026-10-05 22:20:03,548 INFO Evaluating Random Forest model...
+2026-10-05 22:20:03,634 INFO Random Forest model evaluation complete. Accuracy: 0.7892, Precision: 0.6222, Recall: 0.5241, ROC AUC: 0.8335
+2026-10-05 22:20:03,634 INFO Evaluating XGBoost model...
+2026-10-05 22:20:03,673 INFO XGBoost model evaluation complete. Accuracy: 0.7842, Precision: 0.6067, Recall: 0.5321, ROC AUC: 0.8319
+2026-10-05 22:20:03,673 INFO Evaluating LightGBM model...
+2026-10-05 22:20:03,726 INFO LightGBM model evaluation complete. Accuracy: 0.8055, Precision: 0.6582, Recall: 0.5561, ROC AUC: 0.8484
+2026-10-05 22:20:03,727 INFO All models evaluated. Results:
+            model_name  accuracy  ...   roc_auc          confusion_matrix
+0  Logistic Regression  0.799148  ...  0.849562  [[922, 113], [170, 204]]
+1        Decision Tree  0.731725  ...  0.658343  [[843, 192], [186, 188]]
+2        Random Forest  0.789212  ...  0.833522  [[916, 119], [178, 196]]
+3              XGBoost  0.784244  ...  0.831920  [[906, 129], [175, 199]]
+4             LightGBM  0.805536  ...  0.848423  [[927, 108], [166, 208]]
+
+[5 rows x 6 columns]
+2026-10-05 22:20:03,735 INFO Best model: Logistic Regression
+2026-10-05 22:20:03,737 INFO Best model (Logistic Regression) saved successfully.
+2026-10-05 22:20:03,737 INFO Evaluation complete.
+            model_name  accuracy  ...   roc_auc          confusion_matrix
+0  Logistic Regression  0.799148  ...  0.849562  [[922, 113], [170, 204]]
+1        Decision Tree  0.731725  ...  0.658343  [[843, 192], [186, 188]]
+2        Random Forest  0.789212  ...  0.833522  [[916, 119], [178, 196]]
+3              XGBoost  0.784244  ...  0.831920  [[906, 129], [175, 199]]
+4             LightGBM  0.805536  ...  0.848423  [[927, 108], [166, 208]]
+
+[5 rows x 6 columns]
+2026-10-05 22:20:03,749 INFO 
+            model_name  accuracy  ...   roc_auc          confusion_matrix
+0  Logistic Regression  0.799148  ...  0.849562  [[922, 113], [170, 204]]
+1        Decision Tree  0.731725  ...  0.658343  [[843, 192], [186, 188]]
+2        Random Forest  0.789212  ...  0.833522  [[916, 119], [178, 196]]
+3              XGBoost  0.784244  ...  0.831920  [[906, 129], [175, 199]]
+4             LightGBM  0.805536  ...  0.848423  [[927, 108], [166, 208]]
+
+[5 rows x 6 columns]
+[LightGBM] [Info] Number of positive: 1495, number of negative: 4139
+[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.000578 seconds.
+You can set `force_row_wise=true` to remove the overhead.
+And if memory is not enough, you can set `force_col_wise=true`.
+[LightGBM] [Info] Total Bins 941
+[LightGBM] [Info] Number of data points in the train set: 5634, number of used features: 52
+[LightGBM] [Info] [binary:BoostFromScore]: pavg=0.265353 -> initscore=-1.018328
+[LightGBM] [Info] Start training from score -1.018328

@@ -64,6 +64,7 @@ Run only integration:      pytest tests/test_models.py -m integration
 from __future__ import annotations
 
 import ast
+import hashlib
 import importlib
 import logging
 import sys
@@ -80,6 +81,19 @@ if str(REPO_ROOT) not in sys.path:
 MODEL_PATH = REPO_ROOT / "models" / "best_model.pkl"
 METRICS_PATH = REPO_ROOT / "evaluation" / "model_comparison.md"
 DB_PATH = REPO_ROOT / "database" / "churn.db"
+
+
+def _tracked_report_sha256() -> str | None:
+    """
+    SHA-256 of the TRACKED evaluation/model_comparison.md, or None if absent.
+
+    Used to prove that running this test suite does not rewrite a committed
+    metrics artifact (NEW-02). Hashed rather than compared byte-for-byte so the
+    assertion message stays short.
+    """
+    if not METRICS_PATH.exists():
+        return None
+    return hashlib.sha256(METRICS_PATH.read_bytes()).hexdigest()
 
 requires_model_artifact = pytest.mark.skipif(
     not MODEL_PATH.exists(),
@@ -502,9 +516,26 @@ class TestTrainingPipelineEndToEnd:
     """
 
     def test_evaluate_all_models_produces_a_usable_artifact(self, tmp_path) -> None:
+        """
+        Trains all five models and checks the artifacts it produces.
+
+        The Markdown report is redirected into `tmp_path` on purpose: it is a
+        TRACKED file, and before Phase 2 this test (plus the two logging tests
+        below) rewrote `evaluation/model_comparison.md` with whatever the local
+        environment produced, so a plain `pytest` run dirtied a committed
+        metrics artifact (NEW-02). The final assertion below is the regression
+        guard for that: the tracked report must be byte-identical afterwards.
+
+        The model pickle is still written to the repo's `models/` directory --
+        it is gitignored, and the next test in this class deliberately reloads
+        it to close the training -> prediction loop.
+        """
         from training.evaluate_models import evaluate_all_models
 
-        results_df = evaluate_all_models()
+        tracked_report_before = _tracked_report_sha256()
+        report_dir = tmp_path / "evaluation"
+
+        results_df = evaluate_all_models(report_dir=report_dir)
 
         assert len(results_df) == 5
         expected_models = {
@@ -522,6 +553,20 @@ class TestTrainingPipelineEndToEnd:
 
         assert MODEL_PATH.exists()
         assert METRICS_PATH.exists()
+        # The report this run produced is the redirected one, not the tracked one.
+        assert (report_dir / "model_comparison.md").exists()
+        assert (
+            "## Selected Model"
+            in (report_dir / "model_comparison.md").read_text(encoding="utf-8")
+        )
+        # ... and the tracked report was left alone.
+        assert _tracked_report_sha256() == tracked_report_before, (
+            "Running the test suite modified the tracked "
+            "evaluation/model_comparison.md. Training output must be redirected "
+            "(evaluate_all_models(report_dir=...)) so pytest never rewrites a "
+            "committed metrics artifact -- see NEW-02 in "
+            "FLAGSHIP_IMPLEMENTATION_PLAN.md."
+        )
 
     def test_freshly_trained_artifact_loads_and_predicts(self) -> None:
         """
@@ -561,23 +606,25 @@ class TestTrainingAndEvaluationLoggingCoverage:
         assert any("training complete" in message for message in messages)
 
     def test_evaluation_logs_metrics_per_model(
-        self, caplog: pytest.LogCaptureFixture
+        self, caplog: pytest.LogCaptureFixture, tmp_path: Path
     ) -> None:
         from training.evaluate_models import evaluate_all_models
 
         with caplog.at_level(logging.INFO, logger="training.evaluate_models"):
-            evaluate_all_models()
+            # report_dir keeps this run from rewriting the tracked report (NEW-02).
+            evaluate_all_models(report_dir=tmp_path / "evaluation")
 
         messages = [record.message for record in caplog.records]
         assert any("evaluation complete" in message for message in messages)
 
     def test_evaluation_logs_best_model_selection(
-        self, caplog: pytest.LogCaptureFixture
+        self, caplog: pytest.LogCaptureFixture, tmp_path: Path
     ) -> None:
         from training.evaluate_models import evaluate_all_models
 
         with caplog.at_level(logging.INFO, logger="training.evaluate_models"):
-            evaluate_all_models()
+            # report_dir keeps this run from rewriting the tracked report (NEW-02).
+            evaluate_all_models(report_dir=tmp_path / "evaluation")
 
         messages = [record.message for record in caplog.records]
         assert any("Best model" in message for message in messages)

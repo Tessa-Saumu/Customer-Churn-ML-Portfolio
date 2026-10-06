@@ -16,14 +16,17 @@ Integration exposed an outcome-derived `churn_score` feature unavailable in real
 
 Five candidates were compared on one stratified split, so this holdout also served model selection; it is not an untouched final evaluation. No temporal/geographic generalization, causal impact or production use is established.
 
+Those published numbers are the **legacy single-split result**, archived and labelled in [`evaluation/legacy/`](evaluation/legacy/). Re-running the *same* protocol in the pinned Python 3.11 environment selected the same model at accuracy **0.7991** / ROC AUC **0.8496** (XGBoost also moved; the other three candidates are bit-identical). That rerun is **recorded, not substituted** — see [`evaluation/reproduction/2026-10-05-pinned-single-split/`](evaluation/reproduction/2026-10-05-pinned-single-split/) and [`docs/reproduction_record.md`](docs/reproduction_record.md). A fair-baseline / cross-validated protocol is separate, planned work; until it lands, neither number is an untouched final estimate.
+
 ## Limitations and current status
 
 - **KPI boundary — repaired (post-sprint, Phase 1, 2026-10-05):** `/kpis` used to call `CustomerRepository.get_all()` with its default page size of 100, so it summarized the first 100 rows and presented them as the whole population (on this dataset: `customer_count: 100`, `overall_churn_rate: 100.0`). It now computes a single whole-table SQL aggregate (`CustomerRepository.get_kpi_aggregate()`), so `/kpis` reports the full population — 7,043 customers and a 26.54% churn rate — without materializing customer rows. `/customers` still returns one page by default; that pagination is the mentor's intentional design and was not changed. Regression coverage: `tests/test_kpi_aggregate.py` and the `/kpis` population guards in `tests/test_api.py`.
-- Existing tests did not catch that regression, and many integration tests still skip when generated database/model artifacts are absent. Historical full-suite success is not a claim of current system correctness; a clean artifact-present run is scheduled as part of the reproducibility work.
-- The endpoint verification scripts previously carried stale assertions (including pre-leakage LightGBM metrics in the shell script). They have been rewritten against the current contract and now pass, but they have not yet been re-run as a pair on a PowerShell-capable machine.
-- No cloud deployment is established. The deployment workflow is disabled, dependencies are unpinned, and no green CI claim is made. Docker/Streamlit files exist; their presence does not prove a working deployment.
+- Existing tests did not catch that regression, and many integration tests still skip when generated database/model artifacts are absent. Historical full-suite success is not a claim of current system correctness. A clean artifact-present run in the pinned environment is now recorded in [`docs/reproduction_record.md`](docs/reproduction_record.md); **enforced CI is still open** (there is no workflow that runs the tests).
+- **Reproducibility — pinned (Phase 2, 2026-10-05):** one supported runtime (CPython 3.11, `.python-version` = 3.11.2) and one pinned dependency set (`requirements.txt` + `requirements.lock.txt`) now define the environment; a second clean venv built from them froze to exactly the committed lock, and two training runs produced byte-identical reports *and* pickles. Python 3.12 — previously claimed here and in the Dockerfiles — was never run and could not be tested in this environment; the container images were aligned to `python:3.11-slim` but **no Docker build was executed**, so the container path remains documented-not-verified.
+- The endpoint verification scripts previously carried stale assertions (including pre-leakage LightGBM metrics in the shell script). They were rewritten against the current contract in Phase 1: `scripts/verify_endpoints.sh` passes **29/29** against a live API in the pinned environment and exits nonzero on a failed or missing check. `scripts/verify_endpoints.ps1` **has still never been executed** — no PowerShell runtime was available in either phase — so it is written and syntax-checked only.
+- No cloud deployment is established. The deployment workflow is disabled and no green CI claim is made. Docker/Streamlit files exist; their presence does not prove a working deployment, and the Streamlit demo is an **optional, unverified** path that no test exercises.
 - The committed Power BI screenshots are historical report captures. The refresh instructions below describe the intended local setup, not a newly verified live ODBC connection.
-- Code defects and evaluation protocols were not changed for this documentation pass.
+- Code defects and evaluation protocols were not changed for this documentation pass, with two exceptions that change no metric: the Phase 1 KPI aggregate, and an optional `report_dir` parameter on `evaluate_all_models()` so `pytest` cannot rewrite the tracked comparison file.
 
 **Project work:** July-August 2026. The earlier nine-day figure was a planning target, not demonstrated elapsed delivery time.
 
@@ -49,7 +52,7 @@ Five candidates were compared on one stratified split, so this holdout also serv
 ### Prerequisites
 
 - **Git** — [install instructions](https://git-scm.com/downloads)
-- **Python 3.12** — confirm with `python --version`
+- **Python 3.11** — confirm with `python --version`. This is the supported runtime; `.python-version` pins `3.11.2`, the exact patch level the whole pipeline was verified on ([`docs/reproduction_record.md`](docs/reproduction_record.md)). Python 3.12 was claimed by this README and the Dockerfiles until 2026-10-05 but had never been run; it is neither validated nor excluded.
 - Public read access is sufficient to clone; collaborator access is needed only to push.
 
 ### Clone the repository
@@ -69,16 +72,25 @@ git --version
 git config --global user.name "Your Name"
 git config --global user.email "your-email@example.com"
 
-# Confirm Python 3.12 is installed
+# Confirm Python 3.11 is installed (supported runtime — see .python-version)
 python --version
 
 # Create and activate a virtual environment
 python -m venv venv
 source venv/bin/activate  # on Windows: venv\Scripts\activate
 
-# Install dependencies
+# Install dependencies — every direct dependency is pinned in requirements.txt,
+# which constrains itself with requirements.lock.txt (the full verified closure),
+# so this install is deterministic.
+pip install --upgrade pip wheel
 pip install -r requirements.txt
 ```
+
+> **On macOS/Windows:** use `pip install -r requirements.txt` as above. Do **not**
+> install `requirements.lock.txt` directly — it is a Linux `pip freeze` and contains
+> Linux-only transitive packages (`nvidia-nccl-cu12` via xgboost, `uvloop` via
+> `uvicorn[standard]`). Used as the constraints file those entries are inert on other
+> platforms. See the header of that file and [`docs/reproduction_record.md`](docs/reproduction_record.md) §2.
 
 ### Configure environment variables
 
@@ -88,7 +100,9 @@ Copy the example environment file and fill in real values:
 cp .env.example .env
 ```
 
-See `.env.example` for the full list of required variables (API key, database path, etc.). **Never commit `.env`** — it's already listed in `.gitignore`. 
+`.env.example` lists **only variables the code actually reads**: `API_KEY` (required for every endpoint except `GET /health`) plus the two optional artifact paths below. **Never commit `.env`** — it's already listed in `.gitignore`, and `tests/test_reproducibility.py` fails if a secret or generated file is ever tracked.
+
+Three settings that used to be documented in `.env.example` were removed on 2026-10-05 because nothing read them: `DATABASE_PATH` (`database/db_connection.py` hardcodes `database/churn.db`, relative to the working directory), `API_HOST` and `API_PORT` (uvicorn owns those through CLI flags: `uvicorn app.main:app --host 0.0.0.0 --port 8000`). They were placeholders that silently did nothing.
 
 As of Issue #14 (real model integration), two additional variables are supported. Both are optional — if unset, they default to the repo-standard paths (`models/best_model.pkl` and `evaluation/model_comparison.md`), so no `.env` change is required to run the project as before. Set them only if your model artifacts live somewhere other than the repo root (e.g. a container image that copies only `app/`, `predict.py`, and `models/`): 
 
@@ -96,6 +110,8 @@ As of Issue #14 (real model integration), two additional variables are supported
 MODEL_PATH=models/best_model.pkl
 MODEL_METRICS_PATH=evaluation/model_comparison.md
 ```
+
+Both are read at **import** time, so `app/main.py` calls `load_dotenv()` *before* importing the router. Until 2026-10-05 the router was imported first, which meant a `MODEL_METRICS_PATH` written into `.env` was silently ignored — only a real exported variable (such as the `Dockerfile`'s `ENV`) took effect. The ordering is guarded by a structural test and a subprocess test in `tests/test_reproducibility.py`.
 
 ---
 
@@ -115,7 +131,7 @@ customer-churn-platform/
 ├── docs/
 │   └── data_dictionary.md
 ├── etl/             # Data ingestion and cleaning scripts
-├── evaluation/      # Model evaluation scripts and metrics
+├── evaluation/      # Published model comparison, plus legacy/ (historical archive) and reproduction/ (pinned rerun)
 ├── schemas/         # Pydantic request/response schemas
 ├── sql/             # Schema DDL, analysis queries, views
 ├── tests/
@@ -126,7 +142,7 @@ customer-churn-platform/
 ├── training/        # Model training scripts
 ├── utils/           # Shared helper functions
 ├── data/
-│   └── raw/         # Raw dataset CSV (gitignored — see .gitignore)
+│   └── raw/         # Tracked reproduction input: telco_churn_raw.csv (see docs/data_provenance.md)
 ├── scripts/
 │   ├── verify_endpoints.sh    # Endpoint verification script (macOS/Linux)
 │   └── verify_endpoints.ps1   # Endpoint verification script (Windows PowerShell)
@@ -226,6 +242,10 @@ All endpoints require an `X-API-Key` header except `/health`.
 
 This section demonstrates how to run the project end-to-end on your local machine, from ETL to model training, API startup, and tests. 
 
+**Input data — nothing to download.** The pipeline reads one tracked file, `data/raw/telco_churn_raw.csv` (7,043 rows × 33 columns, SHA-256 `e984530b5b1c67a0f2abe6496e65b99ab8d163d7e1b4c83fc1c3e2d71db57a34`). Its source (the Kaggle IBM Telco listing), version, checksum and **unconfirmed** redistribution status are recorded in [`docs/data_provenance.md`](docs/data_provenance.md). `tests/test_reproducibility.py` re-checks that hash on every run, so you can tell whether your clone holds the exact input the published results came from. (Earlier versions of this README and `STRUCTURE.md` described the file as gitignored; that was false — it is tracked, and `.gitignore` now says so explicitly.)
+
+**Generated files stay out of Git.** `database/churn.db` and `models/best_model.pkl` are gitignored and produced by the steps below, so a clean checkout has neither until you run them.
+
 ### 1. Run the ETL pipeline
 
 Initialize and populate the SQLite database with the customer churn data and SQL views: 
@@ -264,6 +284,15 @@ This command is intended to:
 - Select the best-performing model based on the evaluation metrics.
 - Save the selected model to `models/best_model.pkl`.
 - Generate the evaluation report at `evaluation/model_comparison.md`.
+
+> **This overwrites a tracked file.** `evaluation/model_comparison.md` holds the *legacy* published result, so after running training your working tree will show it as modified. Compare it with the pinned rerun, then restore the committed bytes:
+>
+> ```bash
+> diff evaluation/model_comparison.md evaluation/reproduction/2026-10-05-pinned-single-split/model_comparison.md
+> git checkout -- evaluation/model_comparison.md
+> ```
+>
+> In the supported environment the two are identical apart from Logistic Regression's and XGBoost's rows ([`docs/reproduction_record.md`](docs/reproduction_record.md) §6–7). `pytest` does **not** modify this file — the retraining tests redirect their report into a temporary directory, and a test fails if that ever stops being true.
 
 ### 3. Run the API locally
 
