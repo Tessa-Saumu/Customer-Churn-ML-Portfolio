@@ -2,7 +2,7 @@
 
 **Source of scope:** [`FLAGSHIP_GAP_AUDIT.md`](FLAGSHIP_GAP_AUDIT.md)
 **Plan type:** minimum consolidation needed for the audit's Flagship Definition of Done
-**Implementation status:** **Phase 1 complete (2026-10-05). Phases 2–5 not started.** See [Phase 1 implementation record](#phase-1-implementation-record) below.
+**Implementation status:** **Phases 1–2 complete (2026-10-05). Phases 3–5 not started.** See the [Phase 1](#phase-1-implementation-record) and [Phase 2](#phase-2-implementation-record) implementation records below.
 
 ## Scope and guardrails
 
@@ -231,6 +231,153 @@ A clean, documented environment and input policy that a reviewer can use to repr
 ### Rollback/risk considerations
 
 Package pins can alter numerical output, especially for XGBoost/LightGBM. That is a provenance finding, not permission to change old values silently. Preserve the archived result and label the pinned rerun. If dataset redistribution is uncertain, prefer removing the raw file from the public copy and documenting acquisition over assuming permission; this may mean CI uses a separate permitted fixture in Phase 4.
+
+---
+
+## Phase 2 implementation record
+
+**Completed:** 2026-10-05. **Status: all four Phase 2 acceptance criteria met.** Two of them were met by a documented decision rather than by the branch the plan preferred — the supported Python version (3.11, because 3.12 could not be tested here) and the dataset policy (retained and documented, because no credential-free acquisition path exists to fall back on). See Deviations 1–2. Phases 3–5 were not started.
+
+Authoritative detail lives in two new documents, which this record summarises rather than duplicates:
+
+- [`docs/reproduction_record.md`](docs/reproduction_record.md) — runtime, pins, input, protocol, commands, timings, results, determinism evidence, caveats, verification runs.
+- [`docs/data_provenance.md`](docs/data_provenance.md) — input identity/checksum, upstream source, rights status and the retention decision.
+
+### Pre-implementation verification
+
+The plan was checked against the tree before any edit. Assumptions that held:
+
+| Plan assumption | Verified in tree | Result |
+|---|---|---|
+| `requirements.txt` pins nothing | 14 bare distribution names, no `==` | Confirmed |
+| `README.md` documents Python 3.12 and the Dockerfiles use `python:3.12-slim` | README prerequisites line; `Dockerfile` (2 stages), `Dockerfile.streamlit` | Confirmed |
+| `DATABASE_PATH`, `API_HOST`, `API_PORT` in `.env.example` are read by nothing | Repo-wide grep: `database/db_connection.py` hardcodes `DB_PATH = Path("database/churn.db")`; no module reads `API_HOST`/`API_PORT` (the `Makefile`'s `API_PORT` is a make variable, not an env lookup) | Confirmed |
+| `MODEL_METRICS_PATH` "does not work as documented" | Confirmed, and root-caused more precisely than the plan assumed — see Deviation 3 | Confirmed |
+| `data/raw/telco_churn_raw.csv` is tracked while `.gitignore` ignores it | Blob `394eabead4b6…`, mode 100644, tracked; rules `data/raw/*.csv` + `data/raw/` | Confirmed. The `!data/raw/.gitkeep` negation was additionally **inert** (Git never descends into an ignored directory, and no `.gitkeep` exists) |
+| `README.md`/`STRUCTURE.md` repeat the false "gitignored" claim | README repository-structure tree; STRUCTURE.md line 7, tree entry, and the "Gitignored paths you'll need to generate locally" list | Confirmed (4 places) |
+| NEW-02: `pytest` rewrites the tracked `evaluation/model_comparison.md` | 3 `evaluate_all_models()` call sites in `tests/test_models.py`; `REPORT_DIR = Path("evaluation")` is cwd-relative | Confirmed **and reproduced**: at HEAD in the pinned env, one full suite run changed the file's SHA-256 from `a976bb7b…` to `23c73d8a…` and left `git status` reporting it modified |
+| The committed comparison files are the legacy single-split result | `evaluation/model_comparison.md` `a976bb7b…`, `.csv` `04d35816…` | Confirmed, archived byte-for-byte **before** any rerun |
+| Baseline suite is green | Pristine copy of HEAD (`b86c1b9`) in the pinned environment | **103 passed / 0 failed** — matches the Phase 1 record |
+
+**Assumptions that were no longer valid, or that this phase had to qualify:**
+
+1. **"Prefer the currently documented Python 3.12 if it works."** 3.12 could not be tested at all in this environment: the only interpreter is 3.11.2, `apt` has no package lists (so no `python3.12`), and every network route to a 3.12 build was blocked — `python.org` and `codeload.github.com` refused the connection, and GitHub release assets failed the TLS handshake. A bounded attempt was made and abandoned per Stop Condition 5. The supported runtime is therefore the one that was actually verified (Deviation 1).
+2. **"If rights cannot be established, stop publishing the file and document the permitted download/setup path … Do not rely on credentials or a private URL."** Rights genuinely cannot be established, but the two halves of that instruction are not simultaneously satisfiable for this dataset: the only acquisition route is Kaggle, which requires a logged-in account and serves an `.xlsx` (not this CSV), and the IBM Community page the listing cites as its source returned **HTTP 404** when checked. There is no credential-free path to document (Deviation 2).
+3. **"Pin the installed Python dependencies using the existing pip workflow."** The resolved closure is platform-specific: xgboost 3.2.0 pulls `nvidia-nccl-cu12` (a 351 MB Linux-only wheel) and `uvicorn[standard]` pulls `uvloop`. A full freeze inside `requirements.txt` would therefore have broken `pip install -r requirements.txt` on macOS/Windows, which the README documents (Deviation 8).
+4. **The plan's Phase 2 test list assumed a fresh-state run would be publishable.** It is recorded (59 passed / 71 skipped / 0 failed) but, as in Phase 1, is **not** published as the final count — that belongs to Phase 4's CI run.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `requirements.txt` | Rewritten: 15 **exact** pins (was 14 unpinned names) grouped by role with rationale comments, plus `-c requirements.lock.txt` so the single documented install command is deterministic. `requests` declared explicitly (Deviation 4); the Streamlit block is labelled optional/unverified. |
+| `requirements.lock.txt` | **New.** 63-package `pip freeze` of the verified environment, with a header recording how it was generated and its Linux platform scope. |
+| `.python-version` | **New.** `3.11.2`. |
+| `.env.example` | `DATABASE_PATH`, `API_HOST`, `API_PORT` **removed** (nothing reads them). `API_KEY`, `MODEL_PATH`, `MODEL_METRICS_PATH` retained and now accurate. Adds an explicit "Not configurable via .env" section naming what actually owns those settings, so the placeholders do not come back. |
+| `app/main.py` | `load_dotenv()` moved **above** `from app.api.routes import router`, so `.env` values reach the import-time readers (`metrics_service.MODEL_METRICS_PATH`, `predict.MODEL_PATH`). Docstring records why; ordering is test-guarded. |
+| `training/evaluate_models.py` | `evaluate_all_models(report_dir=None)` — optional parameter, default reproduces the historical cwd-relative `Path("evaluation")` behaviour exactly. `mkdir(parents=True, …)` and one log line added. **No metric, selection rule or output format changed.** |
+| `tests/test_models.py` | The 3 `evaluate_all_models()` call sites now redirect their report into `tmp_path`; `test_evaluate_all_models_produces_a_usable_artifact` asserts on the redirected report **and** hashes the tracked report before/after to prove the suite leaves it untouched. `hashlib` import + `_tracked_report_sha256()` helper. |
+| `tests/test_reproducibility.py` | **New, 27 tests** in 6 classes: input provenance/checksum/shape, `.gitignore` semantics (via `git check-ignore --no-index`), generated-artifact and secret hygiene, pin/lock/version consistency, `.env.example` ↔ code correspondence (structural AST check plus a subprocess behavioural check), and committed-metrics immutability. 25 run without artifacts; 2 need the model pickle. |
+| `.gitignore` | Raw-data rules replaced: `data/raw/*` + `!data/raw/telco_churn_raw.csv`. The tracked input is now explicitly re-included and everything else dropped into `data/raw/` stays ignored. |
+| `docs/data_provenance.md` | **New.** Input identity (SHA-256, MD5, blob, size, rows, columns, line endings), upstream source/version, the two provenance gaps, the rights analysis, the owner's retention decision with its reasons and reversal procedure. |
+| `docs/reproduction_record.md` | **New.** The single authoritative reproduction record (§§1–11): runtime, pins, determinism proof, input, protocol as run, commands + timings, legacy-vs-pinned result table, what is canonical, caveats, verification runs, copy-paste reproduction steps. |
+| `evaluation/legacy/` | **New.** `model_comparison_single_split.md` + `.csv`, byte-identical to the committed files (hashes recorded in the folder's `README.md`), plus the protocol, source revision and an explicit "historical, not current" label. |
+| `evaluation/reproduction/2026-10-05-pinned-single-split/` | **New.** The pinned rerun's `model_comparison.md`, its `model_comparison.csv` (verbatim script output) and the full `training.log`, plus a label pointing at the record. |
+| `README.md` | Surgical: supported Python version; pinned-install instructions and the macOS/Windows lock caveat; env-var section corrected (dead settings named, ordering fix explained); "Input data — nothing to download" + generated-files note in Running the Project; "this overwrites a tracked file" warning on the training step with the restore command; two structure-tree lines; three limitations bullets updated. **The Phase 5 restructure was not started.** |
+| `STRUCTURE.md` | Scoped to the CSV-tracking contradiction only (3 places). Its other known falsehoods (`training/predict.py`, `training/scripts/verify_pr.ps1`) are explicitly named as still-open Phase 5 work in the note added there — verified absent from the tree before writing that. |
+| `Dockerfile`, `Dockerfile.streamlit` | `python:3.12-slim` → `python:3.11-slim`; `COPY requirements.txt requirements.lock.txt ./` (the `-c` reference breaks a build that copies only the manifest). **Not built or verified — no Docker daemon here** (Deviation 1b). |
+
+### Test results
+
+Environment: CPython 3.11.2, `pip` 26.2.1, Debian 12 x86_64, installed from the committed pinned manifest.
+
+| Run | Result |
+|---|---|
+| Baseline at HEAD (`b86c1b9`) in the pinned env, artifacts present | **103 passed / 0 failed** |
+| Full suite after the changes, artifacts present | **130 passed / 0 failed** (103 + 27 new) in 11.1 s |
+| Per file | `test_api` 34 · `test_etl` 28 · `test_kpi_aggregate` 12 · `test_models` 22 · `test_reproducibility` 27 · `test_sql_views` 7 |
+| Markers | `-m unit` → 58 passed · `-m integration` → 72 passed |
+| Full suite, fresh state (DB + model removed) | 59 passed / 71 skipped / **0 failed**. 25 of the 27 new guards run in this state, so the reproducibility properties are checkable on a clean clone. Not published as final (Phase 4). |
+| Tracked metrics after the whole suite | **Unchanged** (`a976bb7b…` / `04d35816…` before and after) — the NEW-02 fix, verified against the HEAD baseline where the same suite *did* modify them |
+| `python -m compileall` | Clean |
+| `ruff check` 0.16.10 (ad-hoc; no linter is configured in this repo) | Files this phase added or rewrote are clean: `tests/test_reproducibility.py`, `app/main.py`, `tests/test_kpi_aggregate.py`, `app/services/kpi_service.py`, `app/repository/customer_repository.py` → 0 findings. The pre-existing items live in files this phase did not author (`tests/test_api.py` 36, `tests/test_models.py` 9, `tests/test_etl.py` 3, `training/evaluate_models.py` 2, `predict.py` 1), and `tests/test_models.py` and `training/evaluate_models.py` lint **identically rule-for-rule at HEAD** (checked by linting the HEAD blobs). Repo-wide: **61 findings before this phase and 61 after**, so nothing was introduced or masked. Phase 1's record quoted 64 with an unstated ruff version, so that count is not comparable. None fixed: out of scope |
+
+**Negative controls.** Each new guard was run against a deliberately broken scratch copy of the repository and confirmed to fail: dead `.env` setting re-added (2 tests), a requirement unpinned, manifest/lock disagreement, `app/main.py` ordering reverted (structural **and** behavioural test), tracked report tampered with, input CSV tampered with (3 tests), `Dockerfile` back on 3.12, `.gitignore` contradiction restored (2 tests). One control initially appeared to pass and was investigated rather than accepted: the scratch copy's `git checkout --` cleanup had restored the *unpinned* HEAD manifest (my pins were never staged), so there was no disagreement left to detect; re-run in a clean copy it fails correctly.
+
+### End-to-end workflow run
+
+Full clean path in the pinned environment, starting with no `database/churn.db` and no `models/`:
+
+```
+python database/init_db.py         → Database initialized from sql/schema.sql        (0.08 s)
+python etl/load_to_db.py           → Rows inserted: 7043                             (0.54 s)
+python database/init_views.py      → Views initialized from sql/views.sql            (0.04 s)
+python training/evaluate_models.py → Best model: Logistic Regression, saved          (3.28 s)
+uvicorn app.main:app               → all 5 endpoints live
+```
+
+| Check | Result |
+|---|---|
+| Second clean venv from the pinned manifest | `pip freeze` **identical, line for line**, to `requirements.lock.txt` |
+| Training determinism | Two consecutive runs → byte-identical reports (`23c73d8a…`); a third run's `models/best_model.pkl` byte-identical to the second's (`7f545337…`) |
+| CLI-regenerated report vs. the recorded pinned rerun | Byte-identical; the committed legacy bytes were restored afterwards and re-hashed |
+| Input checksum | `e984530b…` matches `docs/data_provenance.md` |
+| Direct SQL cross-check | 7,043 customers · 1,869 churned · 26.54% / 73.46% · avg 64.76 · total 456,116.6 · `customers` + 2 views |
+| Live `/health` | `{"status":"ok"}` (no auth) |
+| Live `/customers` | 401 unauthenticated · 100 rows by default · 5 rows at `?page=1&size=5` |
+| Live `/kpis` | `{7043, 26.54, 73.46, 64.76, 456116.6}` — matches direct SQL |
+| Live `/model-metrics` | `{0.802, 0.648, 0.5561, 0.8494}` — **unchanged legacy values**, as intended |
+| Live `/predict` | 200 with the locked two keys via the smoke script's schema-conformant payload; 422 on malformed input. (One manual probe of mine sent DB column names instead of the schema's `SeniorCitizen`/`tenure`/… and correctly got 422 — my error, not a defect; `docs/api_examples.md`'s `/predict` example was checked and is correct) |
+| `scripts/verify_endpoints.sh` | **29 passed / 0 failed / 0 skipped, exit 0** |
+| Smoke-script failure paths | wrong `EXPECTED_CUSTOMER_COUNT` → exit 1 · no `API_KEY` → exit 2 · non-numeric count → exit 2 |
+| Generated artifacts still ignored | `git check-ignore` confirms `database/churn.db`, `models/best_model.pkl`, `.env`; nothing secret or generated is tracked |
+
+**Not executed:** `scripts/verify_endpoints.ps1` (no PowerShell runtime — unchanged from Phase 1, still NEW-06) and any Docker build (no daemon).
+
+### Deviations from plan
+
+1. **The supported runtime is Python 3.11, not the documented 3.12.** The plan preferred 3.12 "if it works"; it could not be tested here at all (see Pre-implementation verification). Per the plan's fallback and Stop Condition 5, one *tested* version was chosen and documentation was made consistent: README, `.python-version`, `Dockerfile`, `Dockerfile.streamlit` all say 3.11 now, and 3.12 is documented as neither validated nor excluded.
+   - **1b. `Dockerfile` and `Dockerfile.streamlit` were edited** (not in the phase's file list) — base image alignment plus copying the lock file, without which the pinned install cannot resolve in a build. **No Docker build was run**, so the container path remains documented-not-verified exactly as the audit found it.
+2. **The raw CSV stays tracked; the plan's withdrawal branch was not taken.** Rights could not be established, but neither could a credential-free acquisition path, and untracking would not remove the file from the repository's existing public history (a rewrite is out of scope). The decision was put to the repository owner with the evidence, who chose "keep tracked + document honestly". `docs/data_provenance.md` §3 records the reasoning and the exact reversal procedure. Consequently **no permitted test fixture was added** — the plan only required one for the withdrawal branch — and Phase 4's CI can build from the real CSV.
+3. **`MODEL_METRICS_PATH` was repaired rather than removed.** The plan allowed either. Root cause was narrower than assumed: `app/main.py` imported the router before `load_dotenv()`, and inside `routes.py` the `metrics_service` import precedes `from predict import predict` (which loads `.env` itself), so nothing populated the environment before the constant was resolved. An exported variable always worked — the `Dockerfile`'s `ENV` depends on it — so deleting the setting would have removed a working, documented Issue #14 feature. A 3-line reorder makes `.env` behave as documented.
+4. **`requests` was declared even though Streamlit is not in the documented run path.** The plan offered declare-or-label; both were done. It was already installed transitively at exactly `2.34.2`, so the resolved environment is unchanged, and the Streamlit path is labelled optional/unverified in README and `requirements.txt`.
+5. **The canonical report was not replaced by the pinned rerun.** Plan item 5 permits retaining both records and the metric-preservation rule makes a new result current only after Phase 3's acceptance checks. `evaluation/model_comparison.md`/`.csv` stay byte-identical to the legacy values; the rerun lives in `evaluation/reproduction/…`, the archive in `evaluation/legacy/`. Known consequence, recorded not hidden: `/model-metrics` reports 0.8020/0.8494 while the locally trained pickle scores 0.7991/0.8496 (NEW-03 — now measured, still open, Phase 3).
+6. **NEW-02 was fixed rather than merely decided.** Pinning alone would not have stopped `pytest` from rewriting a tracked file; it would only have made the rewrite content-stable. Both were done: pins plus the `report_dir` redirect. Proof: HEAD baseline run changed the hash, post-fix run does not.
+7. **`STRUCTURE.md` was edited** (a Phase 5 file), scoped strictly to the three CSV-tracking claims that FGA-07 requires correcting; its other falsehoods were left and explicitly flagged as still open.
+8. **Pins live in two files, not one.** A full freeze inside `requirements.txt` would break installs on macOS/Windows (Linux-only `nvidia-nccl-cu12`, `uvloop`). Direct pins + `-c` lock keeps one documented command that is deterministic on the verified platform and still installable elsewhere.
+9. **`evaluate_all_models()` gained a parameter.** The plan did not list `training/` among Phase 2's files, but NEW-02 was explicitly assigned to this phase and "needs a decision". The default path is byte-for-byte the old behaviour; only callers that pass `report_dir` differ.
+
+### Backlog status after Phase 2
+
+| ID | Status |
+|---|---|
+| NEW-01 (unpinned deps move metrics) | **Resolved.** Pins + lock committed; drift re-measured and recorded (`docs/reproduction_record.md` §6). |
+| NEW-02 (`pytest` rewrites the tracked report) | **Resolved** (Deviation 6), with a hash guard in `tests/test_models.py` and an immutability test in `tests/test_reproducibility.py`. |
+| NEW-03 (served model can disagree with the report) | **Open, now measured.** Deliberately not fixed in Phase 2 (Deviation 5); Phase 3 regenerates report and pickle together. |
+| NEW-04 (`docs/api_examples.md` `/customers` example wrong) | **Open.** Phase 5. The same file's `/predict` example was checked in this phase and is **correct**. |
+| NEW-05 (`docs/api_examples.md` `/model-metrics` values stale) | **Open.** Phase 5 — must be regenerated against whatever report Phase 3 makes current. |
+| NEW-06 (`verify_endpoints.ps1` never executed) | **Open.** No PowerShell runtime here either. Phase 4. |
+| NEW-07 (`pytest.ini` missing trailing newline) | **Open, untouched** (optional). |
+| NEW-08 (`B905` + advisory ruff findings repo-wide) | **Open, untouched.** Re-measured with ruff 0.16.10: 61 findings both before and after this phase; 0 in the files Phase 2 added. |
+
+### Newly discovered problems (backlog — not fixed in Phase 2)
+
+| ID | Problem | Where | Suggested phase |
+|---|---|---|---|
+| NEW-09 | **The selected model does not converge.** Training logs `ConvergenceWarning: lbfgs failed to converge after 1000 iteration(s)` for Logistic Regression — the winner is stopped by its iteration cap on unscaled one-hot features. Almost certainly true of the legacy runs too (same `max_iter`, same absence of scaling). Not fixed: any change here moves the metrics, which is Phase 3's decision under a documented protocol. | `training/train_models.py` | **Phase 3** (FGA-05) |
+| NEW-10 | **`scripts/generate_model_comparison_csv.py` writes CRLF** while the tracked `evaluation/model_comparison.csv` is LF, so re-running the documented CSV step yields a whole-file diff even when the values are identical (verified: after stripping CR the regenerated file matches the tracked one exactly). | `scripts/generate_model_comparison_csv.py` | **Phase 3** (it regenerates the CSV) |
+| NEW-11 | **`.dockerignore` excludes the host's evaluation report**, and the trainer stage regenerates it inside the image, so a containerised `/model-metrics` reports in-image training numbers rather than the tracked ones. With pins in place that is a concrete 0.7991-vs-0.8020 divergence between container and local serving of the same code. | `.dockerignore`, `Dockerfile` | **Phase 3/5** |
+| NEW-12 | **The lock is Linux-scoped and heavy.** `nvidia-nccl-cu12` (351 MB, xgboost GPU support) plus `uvloop`/`httptools`/`watchfiles`/`websockets` are Linux-only entries; macOS/Windows get the same direct pins but a different transitive closure, and only Linux was verified. Phase 4 should also budget ~600 MB of wheels for CI install time. | `requirements.lock.txt` | **Phase 4** |
+| NEW-13 | **Python 3.12 remains unvalidated.** If the owner wants the previously advertised 3.12, someone must run the pipeline there and re-record it; until then 3.11 is the only supported runtime and the claim is deliberately narrow. | `.python-version`, README, Dockerfiles | Owner decision |
+| NEW-14 | **The tracked CSV cannot be regenerated from its upstream.** Kaggle serves `Telco_customer_churn.xlsx` and no conversion step is committed, so the SHA-256 identifies this repository's copy only; the IBM Community page the listing cites is a 404. | `docs/data_provenance.md` §2 | Recorded; no action unless rights are challenged |
+
+### Environment findings (recorded, not acted on)
+
+- Only CPython 3.11.2 exists in this environment; `apt` has no package lists, `pyenv`/`uv` are absent, and python.org / codeload / GitHub release assets are unreachable, so no second interpreter could be obtained. All virtual environments were built under `/tmp` and are **not** part of the repository.
+- `pip` 26.2.1; `ruff` 0.16.10 installed into a throwaway venv for the ad-hoc lint check only — **no linter was added to the repo**, per the plan's Phase 4 instruction not to decorate CI with a lint/coverage stack.
+- No `.env` exists in the checkout. The behavioural `.env` test creates one at the repo root only when none is present and deletes it in a `finally` block; a follow-up test asserts none was left behind.
+- Scratch verification scripts for this phase were kept outside the repository (in the sandbox's `~/scratch/`) so no tooling that is not part of the documented path lands in the tree.
+- All numbers in this record were produced in this sandbox and are claims about this portfolio copy, not about the original team repository.
 
 ---
 

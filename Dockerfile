@@ -3,7 +3,12 @@
 # ============================================================
 # Stage 1 — Build database and train the ML model
 # ============================================================
-FROM python:3.12-slim AS trainer
+# Base image aligned 2026-10-05 with the one supported runtime (.python-version,
+# docs/reproduction_record.md): Python 3.11. This file claimed Python 3.12 before
+# that, but 3.12 had never been run and could not be tested here. NOTE: no Docker
+# build was executed in this environment (no daemon) -- the container path stays
+# documented-not-verified either way.
+FROM python:3.11-slim AS trainer
 
 WORKDIR /app
 
@@ -18,7 +23,9 @@ RUN apt-get update \
 # ------------------------------------------------------------
 # Python dependencies
 # ------------------------------------------------------------
-COPY requirements.txt .
+# requirements.txt constrains itself with -c requirements.lock.txt, so both files
+# must be in the build context for the pinned install to resolve.
+COPY requirements.txt requirements.lock.txt ./
 
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -75,7 +82,7 @@ RUN test -f evaluation/model_comparison.md \
 # ============================================================
 # Stage 2 — Runtime API
 # ============================================================
-FROM python:3.12-slim AS runtime
+FROM python:3.11-slim AS runtime
 
 WORKDIR /app
 
@@ -90,7 +97,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # ------------------------------------------------------------
 # Python dependencies
 # ------------------------------------------------------------
-COPY requirements.txt .
+# requirements.txt constrains itself with -c requirements.lock.txt, so both files
+# must be in the build context for the pinned install to resolve.
+COPY requirements.txt requirements.lock.txt ./
 
 RUN pip install --no-cache-dir -r requirements.txt \
     && rm -rf /root/.cache/pip
