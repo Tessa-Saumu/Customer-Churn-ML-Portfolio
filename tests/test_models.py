@@ -499,6 +499,149 @@ class TestTrainingPredictDeprecationFlag:
             "the Issue #14 API-field adapter). Confirm this is intentional "
             "before relying on it -- see docs/qa_findings.md."
         )
+
+
+# Columns that must never reach a model, spelled out here independently of
+# training/preprocessing.py's DROP_COLUMNS so that editing that list has to be a
+# deliberate, test-visible act rather than a silent one.
+#
+# These are the columns at the centre of this project's headline finding: the
+# Issue #14 integration discovered that `churn_score` -- an outcome-derived
+# column that is not available in a real prediction request -- was still a model
+# input, which is what produced the invalid pre-leakage figures (LightGBM
+# accuracy ~0.9304 / ROC AUC ~0.9818). Before Phase 4 the exclusion list was
+# documented in prose and comments but pinned by no test at all, so the
+# regression that defined this project was the one thing the suite could not
+# catch. FGA-04 requires CI to cover "leakage-free training/evaluation
+# mechanics"; these tests are that coverage.
+OUTCOME_DERIVED_COLUMNS = ("churn_score", "churn_reason", "cltv", "churn_label")
+IDENTIFIER_COLUMNS = (
+    "customer_id",
+    "country",
+    "state",
+    "city",
+    "zip_code",
+    "lat_long",
+    "latitude",
+    "longitude",
+)
+FORBIDDEN_MODEL_INPUTS = OUTCOME_DERIVED_COLUMNS + IDENTIFIER_COLUMNS
+
+
+def _wide_row_frame() -> pd.DataFrame:
+    """
+    A two-row frame carrying every DROP_COLUMNS entry alongside the columns
+    feature engineering needs, so `prepare_features()` can be exercised without
+    a database. Values are arbitrary; only the column set matters here.
+    """
+    service_columns = [
+        "phone_service",
+        "multiple_lines",
+        "online_security",
+        "online_backup",
+        "device_protection",
+        "tech_support",
+        "streaming_tv",
+        "streaming_movies",
+    ]
+    row = {
+        "customer_id": "0000-AAAAA",
+        "country": "United States",
+        "state": "California",
+        "city": "Los Angeles",
+        "zip_code": "90003",
+        "lat_long": "33.96, -118.27",
+        "latitude": 33.96,
+        "longitude": -118.27,
+        "gender": "Female",
+        "senior_citizen": "No",
+        "partner": "Yes",
+        "dependents": "No",
+        "tenure_months": 12,
+        "contract": "Month-to-month",
+        "paperless_billing": "Yes",
+        "payment_method": "Electronic check",
+        "internet_service": "Fiber optic",
+        "monthly_charges": 70.05,
+        "total_charges": 840.60,
+        "churn_label": "No",
+        "churn_value": 0,
+        "churn_score": 86,
+        "churn_reason": "Competitor made better offer",
+        "cltv": 3239,
+    }
+    row.update({column: "Yes" for column in service_columns})
+    return pd.DataFrame([row, {**row, "tenure_months": 40, "churn_value": 1}])
+
+
+class TestLeakageExclusions:
+    """
+    The leakage correction is the project's central claim, so it is pinned at
+    three levels: the declared exclusion list, the function that applies it, and
+    the artifact that is actually served.
+
+    Markers are set per test rather than on the class: the first two need no
+    generated artifact (so they also run on a fresh clone), while the third
+    inspects the persisted model.
+    """
+
+    @pytest.mark.unit
+    def test_drop_columns_covers_every_outcome_derived_and_identifier_column(
+        self,
+    ) -> None:
+        from training.preprocessing import DROP_COLUMNS
+
+        missing = [
+            column for column in FORBIDDEN_MODEL_INPUTS if column not in DROP_COLUMNS
+        ]
+
+        assert missing == [], (
+            f"{missing} would now survive into the feature set. churn_score in "
+            "particular is outcome-derived and unavailable at prediction time; "
+            "re-admitting it reproduces the invalid pre-leakage metrics "
+            "(~0.9304 accuracy / ~0.9818 ROC AUC) that this project corrected."
+        )
+
+    @pytest.mark.unit
+    def test_prepare_features_removes_every_forbidden_column(self) -> None:
+        from training.preprocessing import prepare_features
+
+        frame = _wide_row_frame()
+        # Guard the guard: the input really does contain the forbidden columns,
+        # so a pass below cannot come from them never having been present.
+        assert all(column in frame.columns for column in FORBIDDEN_MODEL_INPUTS)
+
+        prepared = prepare_features(frame)
+        leaked = [column for column in FORBIDDEN_MODEL_INPUTS if column in prepared.columns]
+
+        assert leaked == [], f"prepare_features() left forbidden columns in place: {leaked}"
+        # The target is still there for prepare_training_data() to pop off.
+        assert "churn_value" in prepared.columns
+
+    @pytest.mark.integration
+    @requires_model_artifact
+    def test_the_served_model_was_fitted_without_any_forbidden_column(self) -> None:
+        """
+        The strongest form of the check: inspects the persisted artifact that
+        `/predict` actually serves, so a model trained by some other path (or an
+        older pickle) is caught rather than inferred from the source list.
+        """
+        model = joblib.load(MODEL_PATH)
+        feature_names = list(model.named_steps["preprocessor"].get_feature_names_out())
+
+        assert feature_names, "the fitted model exposes no feature names"
+        leaked = [
+            name
+            for name in feature_names
+            for forbidden in FORBIDDEN_MODEL_INPUTS + ("churn_value",)
+            if forbidden in name
+        ]
+
+        assert leaked == [], (
+            f"the served model was fitted on leaked/identifier features: {sorted(set(leaked))}"
+        )
+
+
 # ======================================================================
 # SECTION 2 -- INTEGRATION TESTS
 # Full real training pipeline, run end-to-end.
