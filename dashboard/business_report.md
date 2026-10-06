@@ -13,12 +13,29 @@
 > committed Power BI screenshot of the Model Predictions page shows the legacy
 > values; it has not been refreshed (no Power BI Desktop here) and is labelled
 > historical in `README.md`.
+>
+> **One further qualification, added 2026-10-06:** the Executive Summary describes
+> the model as helping "identify customers at risk **before they leave**". The
+> dataset is a static snapshot with no time index, so no prospective or
+> out-of-time performance is established — the model scores customers on the same
+> kind of record it was trained on. Read the phrase as "flag accounts that
+> resemble past churners", not as a forecast.
 
 ## Project Overview
 
 This report summarizes the key findings from the Customer Churn Power BI Dashboard developed as part of the Customer Churn Prediction BI Platform project.
 
-The dashboard connects to the project's SQLite database (`churn.db`) through an ODBC connection and provides interactive insights into customer demographics, churn behavior, revenue impact, and machine learning model performance.
+The dashboard is designed to connect to the project's SQLite database (`churn.db`) through a locally configured SQLite ODBC DSN, and provides interactive insights into customer demographics, churn behavior, revenue impact, and machine learning model performance.
+
+> **Post-sprint qualification (2026-10-06):** the sentence above originally read
+> "connects to the project's SQLite database … through an ODBC connection", in the
+> present tense. What the repository actually evidences is a **documented local
+> setup** — driver, DSN name and refresh steps in `README.md` — plus five committed
+> page captures. There is no verified live connection in this portfolio copy: no
+> Power BI Desktop environment was available to re-open or re-refresh the `.pbix`,
+> so the captures are historical, and nothing here is served over a network. The
+> same applies to the model: `/predict` serves a locally persisted artifact, and
+> the project was never deployed.
 
 The dashboard contains five pages:
 

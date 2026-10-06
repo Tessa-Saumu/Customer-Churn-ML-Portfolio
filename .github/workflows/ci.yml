@@ -1,0 +1,248 @@
+# CI — the single enforced check for this repository.
+#
+# WHY THIS EXISTS (audit item FGA-04, Phase 4, 2026-10-06)
+# -------------------------------------------------------
+# The project's value is a multi-step pipeline (ETL -> SQLite -> training ->
+# FastAPI -> tests), and the test suite could previously exit green while every
+# artifact-dependent integration test silently skipped: on a fresh clone with no
+# database and no model, 82 of 148 tests skip. A green run therefore did not
+# mean the system worked. This workflow builds the artifacts first and then
+# *requires* zero skips, so the artifact-present path is what is actually
+# verified.
+#
+# WHAT THIS IS NOT
+# ----------------
+# Not a deployment pipeline, and not a tooling showcase:
+#   * no deployment step, SSH, cloud service or Docker build;
+#   * no secrets — nothing here reads a repository, organisation or
+#     environment secret, and the API key below is a throwaway literal for a
+#     server that lives only on the runner;
+#   * no build matrix and no second runtime — one supported Python
+#     (.python-version) and one pinned dependency set, per Phase 2;
+#   * no linter or coverage tooling added to decorate the run (explicitly out
+#     of scope for this phase).
+#
+# The repository remains undeployed. The legacy all-commented deployment
+# workflow (.github/workflows/deploy.yml) was retired in the same change; see
+# README "Limitations and current status".
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Read-only token: this workflow only reads the checkout. It cannot push,
+# create releases or write to any other API surface.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # A throwaway key for the API started on the runner and killed at the end of
+  # the job. It authenticates a local process only and is not a credential for
+  # anything external. The API needs *some* API_KEY set, and
+  # scripts/verify_endpoints.sh requires the same value.
+  API_KEY: ci-local-verification-key
+
+jobs:
+  verify:
+    name: Pinned pipeline, full suite, API smoke checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up the supported Python runtime
+        uses: actions/setup-python@v5
+        with:
+          # 3.11.2, read from .python-version — the one runtime the pipeline was
+          # verified on (docs/reproduction_record.md). No matrix on purpose.
+          python-version-file: .python-version
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements.lock.txt
+
+      - name: Install the committed, pinned dependency set
+        run: |
+          python --version
+          python -m pip install --upgrade pip
+          # requirements.txt pins every direct dependency and constrains itself
+          # with requirements.lock.txt (the full verified closure), so this
+          # install is deterministic.
+          pip install -r requirements.txt
+          pip check
+
+      - name: Confirm the installed closure is exactly the committed lock
+        # Guards FGA-03: if a transitive dependency ever resolves to something
+        # other than the recorded closure, the published metrics stop being
+        # attributable to a known environment. `pip freeze` lists the 63
+        # installed distributions (it excludes pip/setuptools/wheel, which the
+        # lock also excludes).
+        run: |
+          pip freeze > installed.txt
+          grep -v '^#' requirements.lock.txt | grep -v '^$' | sort > lock.txt
+          sort installed.txt > installed-sorted.txt
+          if ! diff -u lock.txt installed-sorted.txt; then
+            echo "::error::The installed dependency closure does not match requirements.lock.txt."
+            exit 1
+          fi
+          echo "Installed closure matches requirements.lock.txt exactly."
+
+      - name: Full suite on a clean checkout (artifacts absent — skips expected)
+        # Reports the fresh-clone behaviour explicitly instead of leaving it
+        # implicit: with no database and no model the artifact-dependent tests
+        # skip. Failures are still a hard failure here.
+        shell: bash
+        run: |
+          python -m pytest -q -rs | tee pytest-fresh.log
+          echo "---"
+          echo "Fresh-clone summary (skips are expected and reported above):"
+          tail -n 1 pytest-fresh.log
+
+      - name: Build the database and model from the tracked input
+        # The tracked data/raw/telco_churn_raw.csv is the approved input
+        # (docs/data_provenance.md), so CI builds the real artifacts rather
+        # than a fixture — no substitution, and therefore no need to qualify
+        # what these results describe.
+        run: |
+          python database/init_db.py
+          python etl/load_to_db.py
+          python database/init_views.py
+          python training/evaluate_models.py
+          python scripts/generate_model_comparison_csv.py
+
+      - name: Confirm training did not move the committed metrics
+        # evaluation/model_comparison.{md,csv} are the published result. If a
+        # clean runner in the pinned environment produces different bytes, the
+        # published numbers are not reproducible and this must fail rather than
+        # pass quietly.
+        run: |
+          if ! git diff --exit-code -- evaluation/; then
+            echo "::error::Training in CI regenerated evaluation/ differently from what is committed."
+            echo "The published metrics are not reproducible from the committed input and pins."
+            exit 1
+          fi
+          echo "evaluation/ is byte-identical to the committed result."
+
+      - name: Full suite with artifacts present — zero failures AND zero skips
+        # This is the gate FGA-04 asks for. `shell: bash` runs this with
+        # `-eo pipefail`, so pytest's exit status survives the `tee`; the grep
+        # then turns *any* skip into a failure, because in the artifact-present
+        # state every test in this suite is expected to run.
+        shell: bash
+        run: |
+          python -m pytest -q -ra | tee pytest-artifacts.log
+          if grep -qE '[1-9][0-9]* skipped' pytest-artifacts.log; then
+            echo "::error::Tests skipped in the artifact-present state. A skip here means an"
+            echo "artifact-dependent test did not run, so this is not a complete verification."
+            grep -E '^SKIPPED' pytest-artifacts.log || true
+            exit 1
+          fi
+          echo "---"
+          tail -n 1 pytest-artifacts.log
+
+      - name: Confirm the acceptance-critical tests are in the run
+        # A zero-skip run only proves the suite ran; this proves the specific
+        # guarantees Phase 4 must cover are still present and selected. If one
+        # is renamed, deleted or silently deselected, this fails.
+        shell: bash
+        run: |
+          python -m pytest --collect-only -q > collected.txt
+          required=(
+            # FGA-01 KPI regression: /kpis must be the whole table, not a page.
+            "tests/test_kpi_aggregate.py::TestKpiAggregateIsWholeTable"
+            "tests/test_api.py::TestKpisEndpoint"
+            # Mentor's pagination is preserved, not removed by the KPI fix.
+            "tests/test_kpi_aggregate.py::TestPaginationIsPreserved"
+            # API contract and auth.
+            "tests/test_api.py::TestAuthentication"
+            "tests/test_api.py::TestHealthEndpoint"
+            "tests/test_api.py::TestCustomersEndpoint"
+            "tests/test_api.py::TestModelMetricsEndpoint"
+            "tests/test_api.py::TestPredictEndpointBaseline"
+            # Leakage-free training/evaluation mechanics.
+            "tests/test_models.py::TestLeakageExclusions"
+            "tests/test_models.py::TestSelectionCannotSeeTheHoldout"
+            "tests/test_models.py::TestSelectionProtocol"
+            # Pinned environment and input provenance.
+            "tests/test_reproducibility.py::TestPinnedRuntime"
+            "tests/test_reproducibility.py::TestInputProvenance"
+          )
+          missing=0
+          for node in "${required[@]}"; do
+            if ! grep -qF "$node::" collected.txt; then
+              echo "::error::No test was collected under $node"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Acceptance-critical tests are missing from the collection."
+            exit 1
+          fi
+          echo "All ${#required[@]} acceptance-critical test groups are collected."
+
+      - name: Start the API for the smoke checks
+        shell: bash
+        run: |
+          nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 \
+            > api.log 2>&1 &
+          echo $! > api.pid
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health > /dev/null 2>&1; then
+              echo "API is up."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::The API did not become healthy within 30s."
+          cat api.log
+          exit 1
+
+      - name: Endpoint smoke checks (Bash)
+        shell: bash
+        run: |
+          BASE_URL=http://127.0.0.1:8000 ./scripts/verify_endpoints.sh | tee smoke-bash.log
+          # The script exits 1 on a failed assertion and 2 when it could not
+          # run; `tee` would hide both without pipefail (set by `shell: bash`).
+          if grep -qE '[1-9][0-9]* skipped' smoke-bash.log; then
+            echo "::error::The Bash smoke script skipped a check, so it is not a full pass."
+            exit 1
+          fi
+
+      - name: Endpoint smoke checks (PowerShell)
+        # Closes the long-standing gap that scripts/verify_endpoints.ps1 had
+        # never been executed anywhere (NEW-06): GitHub's ubuntu runners ship
+        # PowerShell 7, so the Windows-path script is now actually exercised
+        # against a live API on every run.
+        shell: pwsh
+        run: |
+          $env:BASE_URL = "http://127.0.0.1:8000"
+          ./scripts/verify_endpoints.ps1 | Tee-Object -FilePath smoke-pwsh.log
+          $status = $LASTEXITCODE
+          if ($status -ne 0) {
+            Write-Error "verify_endpoints.ps1 exited with $status"
+            exit $status
+          }
+          if (Select-String -Path smoke-pwsh.log -Pattern '[1-9]\d* skipped' -Quiet) {
+            Write-Error "The PowerShell smoke script skipped a check, so it is not a full pass."
+            exit 1
+          }
+
+      - name: Stop the API
+        if: always()
+        shell: bash
+        run: |
+          if [ -f api.pid ]; then
+            kill "$(cat api.pid)" 2>/dev/null || true
+          fi
+          echo "--- last lines of the API log ---"
+          tail -n 20 api.log 2>/dev/null || true

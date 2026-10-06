@@ -2,7 +2,7 @@
 
 **Source of scope:** [`FLAGSHIP_GAP_AUDIT.md`](FLAGSHIP_GAP_AUDIT.md)
 **Plan type:** minimum consolidation needed for the audit's Flagship Definition of Done
-**Implementation status:** **Phases 1–3 complete (2026-10-05 → 2026-10-06). Phases 4–5 not started.** See the [Phase 1](#phase-1-implementation-record), [Phase 2](#phase-2-implementation-record) and [Phase 3](#phase-3-implementation-record) implementation records below.
+**Implementation status:** **Phases 1–5 complete (2026-10-05 → 2026-10-06).** All work below was done on the pinned environment (CPython 3.11.2). One caveat is recorded plainly and not papered over: Phase 4's CI workflow is committed and **every step of it was executed locally, in order, and passed**, but GitHub Actions refused to *start* a job for this account ("locked due to a billing issue"), so **no green CI run is claimed** — that is the one Flagship DoD item that remains externally blocked. See the [Phase 1](#phase-1-implementation-record), [Phase 2](#phase-2-implementation-record), [Phase 3](#phase-3-implementation-record), [Phase 4](#phase-4-implementation-record) and [Phase 5](#phase-5-implementation-record) implementation records below.
 
 ## Scope and guardrails
 
@@ -632,6 +632,77 @@ Model libraries may lengthen CI installation or training. Start with one support
 
 ---
 
+## Phase 4 implementation record
+
+**Completed:** 2026-10-06. **Status: all three Phase 4 acceptance criteria are satisfied by the committed workflow plus the local execution of every one of its steps; the runner-based criterion could not be exercised because GitHub refused to start a job for this account (billing lock) — recorded honestly below, not claimed green.** Because Phase 2 decided the CSV *is* distributable (retained, documented), the workflow's "fixture" branch was not needed: CI builds the **real** database and model from the tracked input, so no qualification of what the results describe was necessary.
+
+### Pre-implementation verification
+
+| Plan assumption | Verified in tree | Result |
+|---|---|---|
+| `deploy.yml` is an all-commented legacy workflow | 164 lines: 132 comments, 32 blank, **0 executable** | Confirmed; yet GitHub still listed it `active` and recorded a "failure" on every push (the file is invalid to the runner). Removed; blob `e3847923`. |
+| The tracked CSV may be distributed → CI builds real artifacts | `git ls-files` shows `data/raw/telco_churn_raw.csv`; Phase 2 Deviation 2 retained it | Confirmed — fixture branch **not** needed. |
+| Baseline suite green with artifacts present | 148 passed / 0 failed / 0 skipped (before adding the leakage tests) | Confirmed. |
+| Fresh-state skips are the failure mode FGA-04 describes | 66 passed / 82 skipped | Confirmed — so "zero skips in the artifact-present state" is assertable as exactly zero. |
+| Smoke script passes against a live API | 29 passed / 0 failed / 0 skipped, exit 0 | Confirmed. |
+| Tracked metrics unchanged by training in the pinned env | report `e035eb78…` and CSV `12958fb0…` before/after; `git diff --evaluation/` empty | Confirmed. |
+| NEW-06: `verify_endpoints.ps1` never executed | no `pwsh`/`powershell` in this sandbox | Still open here — but GitHub's `ubuntu-latest` runners ship PowerShell 7, so the workflow exercises it on a runner once jobs can start. |
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `.github/workflows/ci.yml` | **New.** Single job: pinned install (read-only `permissions: contents: read`, `cache: pip`) → `pip check` → assert the installed closure equals `requirements.lock.txt` → fresh-clone suite (skips reported, failures hard) → build real artifacts from the tracked CSV → assert `git diff --exit-code -- evaluation/` → artifact-present suite with `shell: bash` so pytest's exit survives `tee`, then **fail on any `[1-9]... skipped`** → assert the acceptance-critical test groups are collected → start the API on loopback → run `verify_endpoints.sh` (fail on skip) → run `verify_endpoints.ps1` under `shell: pwsh` → always stop the API. No deployment, secrets, matrix, Docker, or lint/coverage stack. |
+| `.github/workflows/deploy.yml` | **Deleted** (100% inert; see above). |
+| `tests/test_models.py` | **Added `TestLeakageExclusions`** (3 tests, each verified to fail on a negative control): the declared `DROP_COLUMNS` covers every outcome-derived/identifier column; `prepare_features()` removes them all (with a "guard the guard" input assertion); and the *served* pickle's fitted feature names contain none (catches `remainder__churn_score`). Two run with no artifacts; one needs the model. |
+| `README.md`, `docs/qa_findings.md` | Surgical Phase-4-caused updates (CI status, removed deploy workflow, scripts-pair status). Full packaging rework is Phase 5. |
+
+### Test results
+
+Environment: the Phase 2 pinned runtime (CPython 3.11.2, `requirements.txt` + `requirements.lock.txt`), rebuilt from a clean artifact state.
+
+| Run | Result |
+|---|---|
+| Baseline at HEAD, artifacts present (before adding leakage tests) | **148 passed / 0 failed / 0 skipped** |
+| Fresh state (no DB/model), after changes | **68 passed / 83 skipped / 0 failed** |
+| Full suite, artifacts present, after changes | **151 passed / 0 failed / 0 skipped** (148 + 3 leakage tests) |
+| Markers | `-m unit` → 67 passed · `-m integration` → 84 passed |
+| `verify_endpoints.sh` against a live API (freshly rebuilt artifacts) | **29 passed / 0 failed / 0 skipped, exit 0** |
+| `pip check` | "No broken requirements found." |
+| `pip freeze` vs committed lock | **byte-identical** (63 distributions) — the basis of the CI closure gate |
+| Tracked metrics after the whole run | report `e035eb78…`, CSV `12958fb0…`, `git diff --evaluation/` empty |
+| `python -m compileall` | clean |
+
+**Negative controls** (in a `/tmp` scratch copy, then reverted): removing `churn_score` from `DROP_COLUMNS` + retrain → all **3** `TestLeakageExclusions` tests fail, and the served-model test's message names `remainder__churn_score`. With the fix restored, all 3 pass.
+
+### CI verification — what ran where, stated exactly
+
+- **Locally:** every `run:` block of `ci.yml` was extracted and executed in order with GitHub's shell semantics (`bash -e -o pipefail` for `shell: bash`, default `bash -e` otherwise). All passed **except** the PowerShell step, which cannot run here (no `pwsh`); the simulator reports it as "not run", not "pass".
+- **Feasibility checks against the real actions:** `actions/checkout@v4` and `actions/setup-python@v5` were fetched and their `action.yml` inputs confirmed (`python-version-file`, `cache`, `cache-dependency-path` all exist); `3.11.2` is present in the `actions/python-versions` manifest, so `python-version-file` resolves exactly on a runner.
+- **On GitHub:** PR #5 (draft, opened to give `pull_request` a ref) triggered `CI` run 37464474259. It **failed with zero steps executed** and the annotation: *"The job was not started because your account is locked due to a billing issue."* A rerun was refused ("workflow file may be broken" — the annotation proves otherwise). Earlier `deploy.yml` runs also "failed" in 0s, consistent with an account-wide runner block, not a defect in this workflow. `actionlint` could not be installed (its release asset is TLS-blocked here), and no other runner label can bypass an account billing lock.
+
+### Deviations from plan
+
+1. **CI is committed but not green; the blocker is external.** The plan's Phase 4 acceptance criterion 1 ("CI installs the committed environment and completes the intended full test path with zero failures and no unexplained skips") cannot be *observed* on a runner while the account is billing-locked. The same path was executed locally with identical commands and passed, so the workflow is evidence-checked but runner-unverified. Recorded as NEW-21.
+2. **Added a `TestLeakageExclusions` regression guard.** Criterion 2 requires CI to include "leakage-free training/evaluation mechanics", but no existing test pinned the exclusion list — the project's headline finding was unguarded. Adding it is the smallest change that makes criterion 2 true rather than aspirational; it is not scope creep.
+3. **The workflow asserts the installed closure equals the lock and that training leaves `evaluation/` unchanged.** These are the two reproducibility properties a clean runner can cheaply prove; they turn "pinned environment" from a claim into a checked invariant. Both pass locally.
+
+### Newly discovered problems (backlog — not fixed in Phase 4)
+
+| ID | Problem | Where | Suggested phase |
+|---|---|---|---|
+| NEW-21 | **GitHub Actions cannot start a job for this account (billing lock)**, so the committed CI has never run on a runner and the repo has no green CI badge. The workflow is locally verified; resolving requires the account owner to clear the billing block, after which the PR's `pull_request` run is the verification. | `.github/workflows/ci.yml`, account settings | Owner action; re-check at any future phase |
+
+### Backlog status after Phase 4
+
+| ID | Status |
+|---|---|
+| NEW-06 (`verify_endpoints.ps1` never executed) | **Still open here** — now *exercised by the CI workflow* on any runner with PowerShell 7, so it will close the moment a job can start (NEW-21). |
+| NEW-12 (Linux-scoped, heavy lock) | Budgeted and accepted: CI installs the committed lock on `ubuntu-latest`; `nvidia-nccl-cu12` makes the install large but is the committed closure. |
+| NEW-15 (suite runtime ~40 s) | Accepted; single job, no matrix, no test disabled. |
+
+---
+
 ## Phase 5 — Professional packaging and final verification
 
 **Audit mapping:** FGA-08, plus final acceptance of FGA-01 through FGA-07.
@@ -676,6 +747,73 @@ A concise, accurate portfolio entry point that tells the reviewer what the proje
 ### Rollback/risk considerations
 
 Documentation changes must not erase the team history or historical results. If a Power BI refresh cannot be reproduced, do not edit the binary report blindly; link to the existing screenshots with an accurate date/scope note. If new metrics change, update all current references together only after the Phase 3 report is accepted; retain the legacy report unchanged.
+
+---
+
+## Phase 5 implementation record
+
+**Completed:** 2026-10-06. **Status: all five Phase 5 acceptance criteria met, with the one honest qualification that "CI is green" is replaced by "CI is committed, every step locally verified, runner blocked by an account billing lock (NEW-21)" — stated in the README, `docs/qa_findings.md`, and the Phase 4 record.** No repository metadata was changed (description/topics remain appropriate, no homepage, no license — all deliberate).
+
+### Pre-implementation verification (what the sweep found, then fixed)
+
+| Contradiction / gap found | Where | Fixed by |
+|---|---|---|
+| `/customers` example used non-existent field names (`senior_citizen: 0`, `tenure`) | `docs/api_examples.md` | Regenerated from live output (all 33 real columns; `senior_citizen` is `"Yes"`/`"No"`, `tenure_months`) |
+| `/model-metrics` example showed `0.84/0.79/0.73/0.88` (matched no run) | `docs/api_examples.md` | Replaced with `0.7991/0.6435/0.5455/0.8496` (current report); `/predict`, `/kpis`, 401/422 shapes likewise captured live |
+| `training/predict.py` and `training/scripts/verify_pr.ps1` described but **absent** | `STRUCTURE.md` | Corrected to absent; the guard test re-described precisely (it proves the import *does not return*, not the file is present) |
+| `STRUCTURE.md` missing all of Phases 1–4 | `STRUCTURE.md` | Regenerated and **programmatically diffed against `git ls-files`** (85 tracked files) |
+| README's linear architecture diagram implied the API feeds Power BI | `README.md` | Replaced with a component/data-boundary diagram showing the four distinct consumer paths |
+| README TOC numbering gap (7→9) and missing sections | `README.md` | Renumbered to the actual H2 list, verified against anchors |
+| Present-tense "connects … through an ODBC connection" and "before they leave" | `dashboard/business_report.md` | Qualified as documented-setup and static-snapshot (no temporal claim) |
+| Stale bullets: "enforced CI is still open", "Phase 5 work" for the capture, "no active CI" | `README.md` | Updated to the current state (CI committed, runner blocked, capture verified current/historical split) |
+| Issue #19 status deferred final counts to Phase 4 | `docs/qa_findings.md` | Now carries current counts (151/0/0, 68/83, 29/29) plus the no-green-CI caveat |
+| Dated evidence doc quoting 0.8020/0.8494 as if current for this repo | `PROJECT_EVIDENCE_CHURN.md` | Dated superseded-in-part banner pointing at the Phase 3 record |
+
+### Checks performed (Phase 5 "Tests/checks", executed, not implied)
+
+- **Clean-checkout run** from deleted artifacts in the pinned env: ETL → views → training → API → smoke → suite. Result: 7,043 rows; report byte-identical (`e035eb78…`); **151 passed / 0 failed / 0 skipped**; smoke **29/29 exit 0**.
+- **`/kpis` vs direct SQL:** 7,043 / 26.54 / 73.46 / 64.76 / 456,116.6 — identical to `SELECT COUNT/SUM/AVG … FROM customers`.
+- **Screenshot vs source:** `churn_drivers.jpg` re-verified current (every KPI, contract-rate and tenure-bucket figure matched live `view_churn_by_contract` / `view_churn_by_tenure_bucket`); `model_predictions.jpg` confirmed historical and labelled. Featured only the verified-current capture.
+- **Local Markdown link sweep:** 0 broken links across the repo.
+- **Leakage-era / present-tense-deployment sweep:** remaining hits are all *labelled historical* (the 91.77/97.43 leakage note, the "not deployed" negatives) — no unqualified current claim survives.
+- `python -m compileall` clean.
+
+### Files changed
+
+| File | Change |
+|---|---|
+| `README.md` | New "at a glance" section (diagram, quickstart, verified capture, one-line status); corrected architecture section; TOC renumbered; Limitations + Power-BI + Coding-Standards bullets updated |
+| `STRUCTURE.md` | Regenerated to the real tree (verified against `git ls-files`); two false paths removed; Phases 1–4 additions listed |
+| `docs/api_examples.md` | Regenerated from live output; pagination, real field names, current metrics, 401/422 shapes |
+| `dashboard/business_report.md` | Qualified ODBC (documented-setup, not verified) and temporal ("before they leave") claims |
+| `docs/qa_findings.md` | Issue #19 note carries current counts and the honest CI caveat; scripts-pair status corrected |
+| `PROJECT_EVIDENCE_CHURN.md` | Dated superseded-in-part banner |
+
+### Deviations from plan
+
+1. **`PROJECT_EVIDENCE_CHURN.md` was edited though not in Phase 5's file list.** It is not the `PROJECT_EVIDENCE.md` the task's reading list names (that file does not exist in this checkout; the audit's evidence file is this one). Leaving it quoting 0.8020/0.8494 unqualified would have left a live contradiction, so a dated banner was added — scope-limited, narrative untouched.
+2. **No repository metadata change.** The audit already judged description/topics appropriate; no homepage (no live demo) and no license (rights unresolved) are both *correct* as-is, so none was added.
+
+### Newly discovered problems (backlog)
+
+| ID | Problem | Where | Suggested phase |
+|---|---|---|---|
+| NEW-22 | **No `LICENSE` and no dataset-redistribution confirmation remain open.** Deliberate (rights unresolved); flagged so it is not mistaken for an oversight once the rest reads as "done". | repo root, `docs/data_provenance.md` | Owner decision, out of scope |
+
+### Backlog status after Phase 5 (cumulative)
+
+| ID | Status |
+|---|---|
+| NEW-01..NEW-20 | As recorded in Phases 1–3; resolved ones stay resolved. |
+| NEW-06 | Open here; exercised by CI once a runner job can start (NEW-21). |
+| NEW-13 (3.12 unvalidated) | Open, owner decision. |
+| NEW-14 (CSV not regenerable from upstream) | Open, recorded. |
+| NEW-16 (CSV vs. model_predictions capture disagree by design) | Resolved by labelling: capture historical, CSV current. |
+| NEW-17 (business_report ODBC/production wording) | **Resolved** this phase (qualification notes). |
+| NEW-18 (`/model-metrics` regex-parses Markdown) | Open, out of scope (FGA-09). |
+| NEW-19 (holdout below CV mean) | Documented in report + README; reviewer-facing wording in place. |
+| NEW-21 | **GitHub Actions billing lock** — the single externally-blocking item. |
+| NEW-22 | License/rights — deliberate owner decision, out of scope. |
 
 ---
 
