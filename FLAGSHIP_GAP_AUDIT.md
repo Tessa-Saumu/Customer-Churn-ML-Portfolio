@@ -1,90 +1,271 @@
 # Flagship Gap Audit — Customer Churn Prediction & BI Platform
 
-**Audit date:** 3 October 2026
-**Target:** `Tessa-Saumu/Customer-Churn-ML-Portfolio` (personal portfolio copy of a mentored team capstone)
-**Snapshot reviewed:** local tree at `1fe383a`
-**Decision:** **Retain as a flagship candidate; consolidate, do not rebuild.**
+**Audit date:** 7 October 2026
+**Auditor:** independent re-audit pass (fresh pinned environment, fresh clone checks, live HTTP runs, unauthenticated GitHub API checks)
+**Target:** `Tessa-Saumu/Customer-Churn-ML-Portfolio`, branch `arena/6023cfe3-customer-churn-ml-portfolio`, HEAD `ceec078` ("Flagship release audit: independent re-verification of the definition of done (#6)")
+**Supersedes:** the 3 October 2026 gap audit that previously occupied this file (recoverable from Git history; its items FGA-01…FGA-10 are crosswalked in Appendix A). The 6 October 2026 [`FLAGSHIP_RELEASE_AUDIT.md`](FLAGSHIP_RELEASE_AUDIT.md) remains the verification record of the consolidation; this audit re-verifies its claims and adds the **public-demonstration requirement** raised by the repository owner on 7 October 2026.
+**Method statement:** no repository claim was trusted. Every executable claim below was re-run in this session in a clean venv built from `.python-version` + `requirements.txt`; GitHub-side claims (visibility, CI state, open PRs, metadata) were checked against the unauthenticated and authenticated GitHub APIs; documentation was checked *against* observed behaviour. **No code was changed by this audit.** The only working-tree change is this file.
+**Decision:** **Retain as flagship candidate. The consolidation is complete and verified; what remains is a small public-presentation layer (one doc fix, one open-PR decision, one account action, one bounded demonstration workstream), not a rebuild.**
 
-## Executive assessment
+---
 
-This repository has credible early-career Applied ML / ML Engineering evidence, particularly in **cross-component integration, leakage correction, regression testing, QA, and honest team attribution**. It is not evidence of a deployed or production ML service. The strongest story is that integration exposed a target-derived feature and a training/API contract mismatch, and that those problems were corrected and documented. The supplied evidence report also records a complete local ETL → model training → API → test run.
+## 0. Premise correction: the repository is already public
 
-The candidate is not yet ready to present as a finished flagship without qualification. The reported full run does not make every live endpoint correct: **the KPI endpoint currently applies customer-list pagination to a whole-dataset summary.** Reproduction is also approximate rather than pinned, the model comparison lacks a baseline and uses its held-out split for model selection, and some scripts/docs still contradict the current tree.
+The owner's brief states "this repository is private, so the changes need to include a public demonstration". **That premise is false as of 2026-10-07 and must be corrected before anything else is planned.**
 
-**Important pagination clarification:** customer pagination is an intentional, mentor-added design to bound response size; it is not itself a defect and should remain the `/customers` default. The defect is that `get_kpis()` calls that paginated list method and mistakes its first page for the whole population. The right-sized repair is a database-side aggregate (for example, `COUNT`, `SUM`, and `AVG` in a repository/service query), not returning every customer row or adding an unbounded “all rows” mode. The supplied evidence and current README attribute the pagination work to the mentor; keep that attribution. If the portfolio owner later fixes and tests the aggregate, credit that maintenance work separately.
+| Check (unauthenticated) | Result |
+|---|---|
+| `GET https://api.github.com/repos/Tessa-Saumu/Customer-Churn-ML-Portfolio` | **200**, `"private": false`, `"visibility": "public"` |
+| `GET https://github.com/Tessa-Saumu/Customer-Churn-ML-Portfolio` (no auth) | **200** |
+| Same for the original team repo `Customer-Churn-Prediction-BI-Platform` | **200**, public |
 
-This is a **bounded consolidation**: fix observable correctness and reproducibility problems, make the evaluation claim defensible, then present the existing system clearly. PostgreSQL, cloud deployment, additional models, and a new frontend are not prerequisites.
+Consequences, in order of importance:
 
-## Evidence basis and attribution
+1. **The "proof" problem is not visibility, it is runnability.** A stranger can already read every file, PR, issue-free branch and audit in this repository. What does not exist is anything a stranger can *run or click*: no hosted service, no GitHub Pages, no recorded walkthrough. The public-demonstration workstream in §5 addresses that gap; it is not a privacy workaround.
+2. **The dataset-redistribution decision is already live.** `data/raw/telco_churn_raw.csv` (IBM Cognos sample, redistribution rights *unconfirmed* per [`docs/data_provenance.md`](docs/data_provenance.md)) has been publicly redistributable since the original sprint. Making the repo private now would not unpublish Git history and would break the free-tier hosting options in §5. The honest options are: keep it public with the recorded decision, or execute the documented withdrawal path. Do not decide this by accident while adding a demo.
+3. **Free-tier public hosting is available.** Streamlit Community Cloud's free tier serves apps from public GitHub repositories [verified against platform documentation, 2026-10-07], which is exactly the situation here. The demo route recommended in §5 depends on the repo staying public.
+4. **Everything else the owner may believe is hidden is already public**: the Arena consolidation branches, all seven PRs, the disabled-CI disclosure, and both audits. That is fine — they read as disciplined maintenance — but it means "presentable" is the only bar left, not "discoverable".
 
-- `PROJECT_EVIDENCE.md` and `PROJECT_PORTFOLIO_AUDIT.md` are not files in this checkout. Their full text was supplied in the request and used as evidence. The repository itself was reviewed, including its source, tests, configuration, docs, screenshots and tracked data. The local Git checkout is shallow, so the detailed historical ownership claims below rely on the supplied evidence and the linked team PR history, not on a fresh local-history reconstruction.
-- The supplied evidence reports a clean local pipeline run on 26 September 2026: 7,043 rows loaded, five models evaluated, a live FastAPI path, and 87 tests passing after artifact generation. **That run was not repeated during this audit.** Runtime results and historical contribution counts are attributed to the supplied evidence, not claimed as new verification here.
-- The current source confirms the relevant design boundary: `CustomerRepository.get_all(page=0, size=100)` is paginated, while `app/services/kpi_service.py` calls it without arguments. The current README already calls out the KPI issue and the stale verification scripts.
-- The GitHub repository description and topics are present and broadly appropriate. There is no homepage URL, which is appropriate while there is no live demo. Five Power BI screenshots and the `.pbix` are committed. No `LICENSE` file is present.
+If the owner genuinely intended a private development history, the correct response is a written decision (Appendix C, FGA2-12), not a visibility flip.
 
-## Definition-of-done assessment
+---
 
-| Area | Assessment | Evidence already present | Remaining gap before flagship presentation |
+## 1. What this audit executed (2026-10-07, pinned environment, CPython 3.11.2)
+
+| Step | Command | Observed |
+|---|---|---|
+| Environment | `python3.11 -m venv .venv && pip install -r requirements.txt` | exit 0; `pip check` clean; `pip freeze` **byte-identical to `requirements.lock.txt`** (63 distributions) |
+| Input identity | `sha256sum data/raw/telco_churn_raw.csv` | `e984530b…57a34`, 7,044 lines — matches README/provenance/tests |
+| Fresh-state suite (no artifacts) | `python -m pytest -q -rs` | **68 passed / 83 skipped / 0 failed**, skips carry actionable reasons |
+| ETL | `init_db.py` → `load_to_db.py` → `init_views.py` | exit 0 ×3; "Rows inserted: 7043"; both views created |
+| Training | `python training/evaluate_models.py` | exit 0; report hash `77336920…` **identical before and after** (`git diff -- evaluation/` empty); CSV regenerated byte-identical |
+| Artifact-present suite | `python -m pytest -q -ra` | **151 passed / 0 failed / 0 skipped** in 42 s |
+| Live API | `uvicorn app.main:app` on 127.0.0.1:8000 | `/health` 200; `/kpis` = `{7043, 26.54, 73.46, 64.76, 456116.6}` = hand-run SQL aggregate; `/model-metrics` = `{0.7991, 0.6435, 0.5455, 0.8496}`; documented `/predict` payload → `0.7113677247256835` (matches `docs/api_examples.md` to the last digit); `/docs` and `/openapi.json` return 200 |
+| Acceptance checks | `API_KEY=… ./scripts/verify_endpoints.sh` (readiness wait first) | **29 passed / 0 failed / 0 skipped, exit 0** |
+| README front-page block, line 5 exactly as written | `uvicorn … & ./scripts/verify_endpoints.sh` (no wait) | **18 passed / 10 failed / 1 skipped, exit 1** — FGA2-01 reproduces |
+| Open PR #7's documented run sequence | fresh clone → install → `generate_model_comparison_csv.py` → `pytest` → start API | **API cannot start**: `import app.main` → `FileNotFoundError: …/models/best_model.pkl` (ETL/training steps are absent from that sequence) — FGA2-02 reproduces |
+| Streamlit demo path (never executed before, per all records) | `streamlit run streamlit-app.py` against the live API | **process starts and serves HTTP 200 on :8501**; all page logic is server-side `requests`, so a hosted Streamlit → hosted API pair needs no CORS. Page-level click-through not executed |
+| SQL views vs. featured screenshot | live queries | contract 42.71/11.27/2.83 (1655/166/48 of 3875/1473/1695); tenure 47.44/25.54/11.93 (1037/474/358 of 2186/1856/3001) — every figure on `churn_drivers.jpg` matches; the same capture shows an unfootnoted **"AVG CHURN SCORE 58.70"** card (recomputed live as 58.70) — FGA2-11 |
+| GitHub state | `gh run list`, `gh pr list`, `gh repo view`, unauthenticated API | latest CI run on `main` **failed with zero steps** (account billing lock); **PR #7 open and unmerged** (README −503/+112); description + 4 topics set; `homepageUrl` empty; no LICENSE; no Pages; no releases |
+
+Nothing above contradicts the 6 October release audit. Three of its residuals are re-confirmed (P1-1 front-page race, zero executed CI runs, unexecuted PowerShell twin) and four **new** findings are added (§3).
+
+---
+
+## 2. Definition-of-done assessment
+
+### A. Core system
+
+**Verdict: works; purpose coherent; unfinished work does not obscure the main path; limitations understood.**
+
+- Primary functionality verified end-to-end this session: tracked CSV → SQLite (7,043 rows, CHECK constraints) → two SQL views → five-model Phase 3 protocol → persisted pipeline → five FastAPI endpoints with real data/model → acceptance checks 29/29.
+- The one historical correctness defect (page-scoped `/kpis`) is fixed with a whole-table aggregate and a 150-row fixture whose first 100 rows are all churned; pagination (mentor's design) is preserved and pinned by tests.
+- Unfinished/experimental residue is small and labelled: empty `training/README.md`, placeholder `schemas/`, `app/models/`, `utils/`, unused ORM in `database/models.py`, archived mock service with a stated reason. None of it is on the verified path or presented as working.
+- Current limitations are stated where a reviewer will meet them (README "Limitations and current status", report "Limits", qa_findings, provenance): import-time model load, regex-parsed metrics report, open tenure top bin, single seed, no temporal claim, unexecuted PowerShell twin, never-green CI, unconfirmed dataset rights.
+
+**Residual gaps:** the front-page convenience block fails as pasted (FGA2-01); an open PR offers a front page whose setup sequence cannot work (FGA2-02).
+
+### B. ML / AI credibility
+
+**Verdict: explicit, honest, and defensible at capstone strength; no leakage or selection defects remain unlabelled.**
+
+| Criterion | Status (verified) |
+|---|---|
+| Problem formulation | Binary churn classification on a static snapshot; stated with its "no time index" consequence |
+| Target | `churn_value`; `churn_label` excluded |
+| Leakage | `churn_score`, `churn_reason`, `cltv` + identifiers/geography dropped; the detect→fix→re-evaluate paper trail is intact and regression-guarded (`TestLeakageExclusions`) |
+| Baseline | `DummyClassifier(strategy="prior")` reported on the same folds and the same holdout; ineligible for selection |
+| Features | 20 business columns + 3 engineered features; documented in `docs/data_dictionary.md`; identical training/inference path (`prepare_features`) guarded by tests |
+| Validation | 5-fold stratified CV **on the training portion only** for selection; winner frozen, refit, scored **once** on the untouched 20% holdout; `select_best_model()` structurally cannot receive holdout rows (tested) |
+| Reproducibility | Pinned runtime + lock; report and CSV regenerate byte-identical (re-verified here); input checksum machine-checked |
+| Final metrics | Holdout: acc 0.7991 / prec 0.6435 / recall 0.5455 / ROC AUC 0.8496; CV means and per-fold AUCs published; legacy single-split result archived and labelled non-comparable |
+| Limitations / claim match | Non-convergence, single seed, no tuning, no threshold work, recall ≈ 55% all stated; "not deployed / no business impact" stated |
+
+**Residual gaps:** none that change the result. Known open modelling nits (non-convergence recorded not fixed; holdout slightly below CV mean, explained) are deliberate, documented decisions — leave them.
+
+### C. Engineering credibility
+
+**Verdict: strong for an early-career portfolio; enforcement is the only structural weakness, and it is external.**
+
+- Structure: layered routes → services → repository → sqlite3; locked public contract; QA findings log with pinning tests; contribution map; process doc. Understandable in minutes via README + STRUCTURE.md.
+- Environment/dependencies: `.python-version` 3.11.2; every direct pin + full verified closure; freeze ≡ lock re-verified; Dockerfiles aligned to 3.11-slim (documented-not-built).
+- Config/secrets: `.env` ignored, `.env.example` lists exactly the variables code reads (guarded by test); placeholder key only; timing-safe key comparison.
+- Tests: 151 tests, zero-skip gate semantics, KPI/pagination/leakage/protocol/provenance/metrics-immutability guards; fresh-clone skips are informative by design.
+- API documentation: `docs/api_examples.md` regenerated from live output; `/docs` + `/openapi.json` live; auth/validation matrix tested and re-verified.
+- Data validation: Pydantic bounds → SQL CHECK constraints → ETL rules pinned by unit tests.
+- Error handling: typed 401/422/500 with actionable detail; failures loud, not silent.
+- Containers: thoughtful two-stage build that generates artifacts in-image; **never executed** (no daemon in any audit so far) — labelled as such.
+- CI: `ci.yml` is exactly the right gate (pinned install → closure check → fresh suite → artifacts → report-immutability → zero-skip suite → required-test collection → live API → both smoke scripts incl. `pwsh`). **It has never executed**: every run, including `main`, died at queue time on the account billing lock.
+- Logging: stdlib `logging` throughout, no `print()`; appropriate for a local service.
+
+**Residual gaps:** FGA2-03 (billing lock ⇒ zero executed runs, visible as red X on every commit of a *public* repo), FGA2-07 (unexecuted PowerShell twin), FGA2-08 (vacuous-pass window in the Bash script when no server is reachable).
+
+### D. Portfolio packaging
+
+**Verdict: excellent documentary packaging; zero runnable/public-facing demonstration. This is the section the owner's new requirement targets.**
+
+| Item | Status |
+|---|---|
+| README | Strong front page (problem, contribution, architecture diagram, verified screenshot, results, limitations). Two defects: the five-command block (FGA2-01) and the open competing rewrite (FGA2-02) |
+| Architecture diagram | Present (ASCII, boundary-honest); PR #7 proposes a Mermaid variant — reconcile, don't run both |
+| Screenshots / demonstration | Five valid Power BI captures (one verified current, one labelled historical); **no hosted demo, no recording, no Pages** |
+| Results | Clear, current, baseline-referenced, limits stated |
+| Contribution boundaries | README + CONTRIBUTORS.md + four merged team-PR links; mentor scaffolding/pagination credited; no sole-authorship claim |
+| Limitations | Explicit and unusually candid |
+| Setup instructions | Canonical sequence verified verbatim; convenience block not (FGA2-01) |
+| Description / topics | Set (4 topics); **homepage empty** — correct today, should point at the demo once one exists |
+| Working links | 0 broken internal links at Phase 5; one cross-file pointer now dangles: `requirements.txt` cites README section "Optional: Streamlit demo", **which does not exist** (FGA2-05) |
+| Dead deployments labelled | Legacy `deploy.yml` removed and its blob recorded; "nothing is deployed" stated; CI failure disclosed verbatim |
+| License | None, deliberately, with a recorded rationale and reversal path (rights + team authorship unresolved) |
+
+### E. Recruiter / interviewer usefulness
+
+A technical reviewer can, within several minutes, establish:
+
+1. **Problem:** local churn-analysis + prediction workflow over the IBM Telco snapshot; not a retention product.
+2. **What was built:** ETL → SQLite/views → five-model comparison → FastAPI serving real model/data → Power BI report; 151-test suite; pinned reproducibility.
+3. **Why the choices:** SQLite/local API fit a capstone; leakage columns removed after a live integration failure; CV-on-training-only selection adopted to stop reusing the holdout; naive baseline added; narrow scope defended in writing.
+4. **How it was evaluated:** protocol section of `evaluation/model_comparison.md` + `docs/reproduction_record.md`; limits listed.
+5. **What worked:** whole-population KPI aggregate equals hand-computed SQL; byte-identical regeneration; 29/29 acceptance checks; one verified-current dashboard capture.
+6. **What failed:** the leaked first run (0.98 AUC) invalidated; the pagination regression found post-sprint; recall ≈ 55%; non-convergence; CI never ran; no deployment.
+7. **Personal contribution:** team-lead/integration/QA role with PR-level evidence; mentor and teammate work explicitly not claimed.
+
+**The one-minute version is where it still loses:** the first thing a reviewer pastes (front-page block) can print a false red; the open PR would make that worse; and there is no clickable artefact to send in a message. FGA2-01/02/04 fix exactly that.
+
+---
+
+## 3. Findings from this audit
+
+| ID | Finding | Evidence | Disposition |
 |---|---|---|---|
-| **A. Core system** | **Mostly there, with one material endpoint correctness issue.** | Coherent local pipeline: public Telco CSV → cleaning → SQLite/SQL → training → FastAPI → Power BI. The supplied report describes a successful full local run. Purpose and limitations are stated near the top of the current README. | `/kpis` summarizes one page rather than the full dataset. `/health` cannot be reached if the model artifact is missing because model loading happens during module import; the documented full setup creates that artifact first, so this is a bounded limitation rather than a reason to redesign the service. Some leftover scaffolding and historical docs are stale, but do not require an architectural rebuild. |
-| **B. ML / AI credibility** | **A credible leakage-and-integration case study; modest model-evaluation strength.** | Binary target `churn_value` is explicit. `churn_score`, `churn_reason`, `cltv`, the identifier/geography fields and text target are excluded; the leakage correction has a paper trail. The engineered features and preprocessing are described in `docs/data_dictionary.md` and code. The selected Logistic Regression result is documented: ROC AUC 0.8494, accuracy 0.8020, precision 0.6480, recall 0.5561. | No baseline is reported. Five candidates are selected on one stratified 80/20 split, so the same test set is used for model selection and does not provide an untouched final estimate. There is no time index for an out-of-time claim. Environment drift was observed. Keep the negative/limited result; do not tune until a larger headline number appears. |
-| **C. Engineering credibility** | **Good capstone structure and meaningful tests, but weak enforcement/reproducibility.** | Clear ETL, training, API, database and test areas; API contracts and SQL constraints; useful integration tests and QA findings. `.env` is ignored and the example key is a placeholder. Existing Docker/Compose files may support an optional local demo. | Dependencies are unpinned; the README says Python 3.12 while the supplied re-run used 3.11. No active CI exists. A fresh-state test run skips many artifact-dependent tests (the supplied report and `docs/qa_findings.md` also disagree by one test on the pass/skip split). No current green CI claim is justified. Several `.env.example` settings are not read by the code, and `requests` is used by Streamlit but is not a direct requirement. |
-| **D. Portfolio packaging** | **A strong base, not yet consistently reviewer-ready.** | The opening README now explains the personal-copy context, contribution boundaries, leakage correction, limitations and absent deployment. It includes setup steps, API links and an ASCII architecture flow. Screenshots, a business report, model metrics and a contributor map exist. GitHub description/topics are set. | The README is 467 lines and its table of contents has a numbering gap; the most useful screenshot is not surfaced as a quick visual demonstration. `STRUCTURE.md`, `docs/api_examples.md`, parts of `docs/qa_findings.md`, and the business report have stale or contradictory claims. The architecture illustration is a useful flow sketch, not a clear component/data-boundary diagram. No recorded demo or live deployment exists; label that honestly. Dataset redistribution rights/policy and a project license decision need care because this is collaborative work using third-party data. |
-| **E. Interviewer usefulness** | **The core story is discoverable; evaluation and current acceptance status need one clean source of truth.** | A reviewer can identify the churn problem, the team nature of the work, the candidate's integration/testing role, the leakage incident, and the reported result from the README. PR links and `CONTRIBUTORS.md` help bound ownership. | A reviewer can still encounter a KPI endpoint that contradicts the example, a verification script that asserts pre-leakage metrics, an old QA sign-off that conflicts with the shipped tree, and a model result whose selection protocol is weaker than the table suggests. Repair those contradictions before inviting technical scrutiny. |
+| F-01 | Repository is **public**, contradicting the brief's premise; dataset-rights and hosting decisions must be taken with that in mind | unauthenticated API/page 200, `"visibility":"public"` | §0; FGA2-12 |
+| F-02 | README front-page "five commands" block still fails deterministically (no readiness wait on line 5) | reproduced 18/10/1 exit 1; with a wait: 29/29 exit 0 | **FGA2-01, P0** |
+| F-03 | Open, unmerged **PR #7** rewrites the README (−503/+112). Its narrative sections are good (it keeps a condensed limitations list, the CI disclosure and the attribution boundaries, and it fixes the F-02 race), **but its "Run locally" sequence omits `init_db`/`load_to_db`/`init_views`/`evaluate_models`**, so the API cannot start (`FileNotFoundError` on a fresh clone) and its own smoke step cannot pass. Merged as-is it would trade a racy false red for a deterministic one | fresh-clone import failure reproduced; diff inspected | **FGA2-02, P0** |
+| F-04 | CI still has **zero executed runs**; newest run (PR #7, 2026-10-07) failed in 4 s with the billing annotation; a public repo shows red on every commit | `gh run list`, run annotation | **FGA2-03, P0** |
+| F-05 | `requirements.txt` points at a README section ("Optional: Streamlit demo") that does not exist; the demo path has **no run instructions anywhere** | grep of README headings | **FGA2-05, P1** |
+| F-06 | The "optional, unverified" Streamlit path **starts and serves** in the pinned env against the live API (first execution on record); because its calls are server-side, a hosted Streamlit + hosted API needs no CORS | process HTTP 200; code inspection | supports §5 route A; FGA2-04/07 |
+| F-07 | FastAPI `/docs` and `/openapi.json` are live by default — a free, honest secondary demonstration surface for any hosted API, and an exposure to label | HTTP 200 both | §5 honesty pack |
+| F-08 | Featured dashboard capture displays "AVG CHURN SCORE 58.70" — the outcome-derived source column — with no footnote | visual + live recompute (58.70) | **FGA2-11, P2** |
+| F-09 | `scripts/verify_endpoints.sh` still reports vacuous content passes on an empty body and its header's "exit 2 if no server reachable" is false (actual 1); the `.ps1` twin already has the correct preflight | code inspection; reproduction | **FGA2-08, P2** |
+| F-10 | `docker-compose.yml` uses `env_file: .env`, a hard requirement for a file that is gitignored — compose fails until the user creates one; relevant only if compose becomes the demo route | compose semantics; not executed (no daemon) | **FGA2-10, P2** |
+| F-11 | CI header comment still says "82 of 148 tests skip"; measured 83 of 151; `docs/reproduction_record.md` §12 verification table is Phase-3-dated; README tail still carries the dangling fragment "Added Containerization" | grep + this session's counts | **FGA2-09, P2** |
+| F-12 | All release-audit numbers re-confirmed independently (68/83, 151/0/0, 29/29, lock≡freeze, byte-identical report/CSV, `/kpis`≡SQL, `/predict`≡docs, views≡screenshot) | §1 table | no action |
 
-### What a reviewer should be able to say after a short read
+---
 
-1. **Problem:** a local churn-analysis and prediction workflow over the IBM Telco snapshot, not a deployed retention product.
-2. **Candidate's work:** real model/API integration, a field adapter, leakage correction and the authored test/QA work—not sole authorship of the team platform.
-3. **Technical choices:** SQLite and a local API/BI workflow fit a capstone; the model comparison selected by ROC AUC after removing outcome-derived inputs. The README should give a concise rationale without presenting the tool choices as production architecture.
-4. **Evaluation:** one stratified split, five default-ish model configurations, no baseline, no temporal data, and selection on that same holdout. The reported Logistic Regression result is useful evidence, not a strong generalization guarantee.
-5. **What worked:** the supplied evidence reports a reproducible local pipeline and a real prediction API; leakage was found and corrected. Five dashboard screenshots are available.
-6. **What failed / remains limited:** the original leaked run is invalid; `/kpis` is page-scoped; dependency drift and the absent baseline/untouched holdout limit the ML claim; there is no verified deployment or production impact.
-7. **Personal contribution:** the contribution map and PR links separate candidate work from teammates' ETL/model/dashboard work and mentor-provided scaffolding/stretch work. In particular, pagination is credited to the mentor; do not describe it as the candidate's original implementation.
+## 4. Repair backlog
 
-## Repair backlog
-
-Scope estimates are planning ranges for the minimum credible portfolio finish, not estimates for a broader product rebuild. **P0** means a correctness or reproducibility blocker; **P1** materially strengthens the evidence; **P2** is worthwhile polish. Complete P0 items before describing the repo as a finished flagship.
+Scope = minimum credible public presentation. **P0** credibility/reproducibility blocker · **P1** materially strengthens evidence · **P2** worthwhile polish.
 
 | ID | Task | Why it matters | Evidence weakness fixed | Priority | Estimated scope | Dependencies |
 |---|---|---|---|---|---|---|
-| **FGA-01** | **Compute `/kpis` over the whole database without removing pagination.** Add a dedicated aggregate query/service (or an equivalent single-row SQL view) for count, churn/retention rates and charge totals. Keep `/customers` paginated with its current default page size. Add a regression test using more than 100 mixed customer rows and compare API values with direct SQL aggregates. Do not fetch all customer rows to calculate a summary. | The current service applies the customer-list default page to a population-level KPI. The supplied report observed 100 customers and a 100% churn rate on the first page, inconsistent with the 7,043-row population. A database aggregate avoids unbounded response/memory cost even for a very large table. | Wrong API summary; no test asserting population-wide correctness. Clarifies the boundary between intentional pagination and aggregate semantics. | **P0** | **Small** — about 0.5–1.5 focused days | None |
-| **FGA-02** | **Repair the endpoint acceptance checks and historical QA wording.** Update or replace the Bash/PowerShell scripts so they test the current API contract, auth/422 behavior, paginated customer responses and population KPI result; remove the pre-leakage LightGBM assertions. Ensure a failed check exits nonzero and missing optional tools cannot be reported as an all-green run. Amend `docs/qa_findings.md` so the Issue #19 pass is clearly historical and not presented as current validation; reconcile the reported fresh-state pass/skip counts after one clean run. | The current Bash script contains invalid leakage-era metric expectations and the API KPI check is incompatible with the current implementation. The QA document says all historical checks passed and no blockers remain, while the current README/source record a later regression. | Unreliable smoke tests and contradictory acceptance evidence. | **P0** | **Small–Medium** — about 1–2 focused days | FGA-01 |
-| **FGA-03** | **Make one clean local reproduction deterministic enough to inspect.** Select and pin one supported Python/dependency environment (or commit a lock/constraints file), state the supported Python version, and run the documented clean setup from the tracked input through ETL, training, report generation, API checks and tests. Record the input dataset identity/hash, seed and dependency versions alongside the regenerated result. Keep model/database binaries generated rather than committing them. | The supplied report observed metric drift across unpinned environments. A reviewer cannot reliably tell whether a changed metric is a bug or package-version drift; current test success also depends on generated artifacts. | Unpinned dependencies, ambiguous runtime version and limited result provenance. | **P0** | **Medium** — about 2–4 focused days, depending on package compatibility | None; coordinate with FGA-07 if the dataset policy changes |
-| **FGA-04** | **Add minimal test CI, not deployment infrastructure.** In one supported environment, have CI install the pinned dependencies, build the database/model artifacts from the approved input, run the complete test suite in the artifact-present state, and run the API smoke checks. Report skips explicitly and fail if integration tests unexpectedly skip. Replace or clearly retire the all-commented legacy deployment workflow; do not re-enable its SSH deployment. | The repository's value depends on a multi-step pipeline and the test suite can exit green while artifact-dependent tests skip. A single deterministic CI job is useful evidence of maintenance discipline; cloud deployment is not. | No enforced tests; ambiguity between fresh-clone skips and a fully exercised run. | **P1** | **Small–Medium** — about 1–3 focused days | FGA-01, FGA-02, FGA-03 |
-| **FGA-05** | **Make the model comparison fairer with a simple baseline and a selection/final-evaluation boundary.** Add a majority/prior baseline. Select among candidate models using only training-side validation (for example, stratified CV on the training portion), then evaluate the selected model once on a frozen holdout. Keep the scope to the current five models—no hyperparameter campaign. Regenerate the model and metrics, and update any dashboard capture that displays the old values. State that the dataset has no time dimension and supports no temporal validation claim. | The current one-split comparison is useful for a capstone but the same held-out rows pick the winner and estimate its performance. A baseline and untouched final estimate make the result more interpretable without expanding the product. | Missing baseline; selection-set reuse; weak support for generalization claims. | **P1** | **Medium** — about 3–5 focused days | FGA-03 |
-| **FGA-06** | **Resolve the tenure-bucket definition mismatch.** Confirm whether the different groupings are intentional. `sql/analysis_queries.sql` and the feature documentation use four ranges (0–12, 13–24, 25–48, 49–72), while `sql/views.sql` defines 0–12, 13–36 and 37+. Choose and document one definition for comparable dashboard/model-facing analysis, or explicitly label separate definitions if there is a reason to keep them. Add boundary checks and verify the dashboard's displayed grouping where Power BI Desktop is available. | Reviewers and stakeholders may compare values built from different segment definitions and assume they match. This is a cross-layer consistency issue, not a reason to rewrite the BI report. | Mismatch between SQL analysis, reusable view, and documented/engineered buckets. | **P1** | **Small–Medium** — about 1–2 focused days, plus Desktop verification if needed | None |
-| **FGA-07** | **Resolve the raw-data provenance and distribution policy.** Record the exact Kaggle source/version and checksum; confirm whether this dataset may be redistributed in this public repository. If it may remain, make the tracked-file policy and `.gitignore` consistent. If not, document a permitted download/setup path and verify the checksum without committing restricted data. Do not add a blanket code license until team authorship and data rights are understood. | `data/raw/telco_churn_raw.csv` is tracked even though `.gitignore` and `STRUCTURE.md` describe it as excluded. The input is essential to reproduction, but provenance and redistribution terms should be explicit. | Input lineage, tracked-vs-ignored contradiction, and licensing ambiguity. | **P1** | **Small** — about 0.5–2 focused days; rights confirmation may take longer | None; decide before finalizing FGA-03 instructions if the input location changes |
-| **FGA-08** | **Make the README a reliable three-minute entry point and reconcile supporting docs.** Keep the problem, the candidate's contribution boundary, the leakage correction, selected result/limits, accurate architecture diagram, one screenshot, clean quickstart and no-deployment status near the top. Link process/spec detail rather than giving it equal weight. Correct `STRUCTURE.md` (tracked CSV, absent `training/predict.py`, nonexistent `training/scripts/verify_pr.ps1`), `docs/api_examples.md` (actual customer field names and current metric values), and the business report's unsupported “production model”/live-connection phrasing. Surface the existing screenshots rather than creating a new frontend or video. | The current README is candid and has the right material, but is long; several secondary documents contradict the code and the current README. Five screenshots exist, but a reviewer has no short visual/demo path from the front page. | Reviewer time-to-understanding, stale structure/API examples and overstrong dashboard/model wording. | **P1** | **Small–Medium** — about 1–3 focused days | FGA-01, FGA-03, FGA-05, FGA-06, FGA-07 |
-| **FGA-09** | **Use a structured source for model metrics.** Generate a small machine-readable evaluation artifact as part of training and have `/model-metrics` read it; keep Markdown as presentation output. Test that the API and report expose the same selected-model values. | The endpoint currently regex-parses a human-readable Markdown report, so harmless report formatting changes can break the API. The existing CSV is useful for BI but is not the API's declared source. | Fragile coupling between API response and report formatting. | **P2** | **Small** — about 1 focused day | FGA-05 |
-| **FGA-10** | **Close only the most relevant boundary-hardening gaps if the API remains a showcased component.** Test clear behavior when the model artifact is missing/corrupt without making `/health` import-fail; address the `tenure > 72` feature bucket and `None` tenure validation with explicit behavior. Also remove or implement unused `.env.example` settings and declare `requests` directly if Streamlit remains a supported run path. | These are real maintainability and error-clarity weaknesses, but the documented local setup currently generates the model before starting the API and the main user story does not require a deployed service. | Artifact-readiness behavior, input-edge semantics and setup/config drift. | **P2** | **Small–Medium** — about 1–3 focused days | FGA-03; FGA-04 makes regression coverage easier |
+| **FGA2-01** | Fix the README front-page block: insert a readiness wait into line 5 (`for i in $(seq 1 30); do curl -fsS localhost:8000/health >/dev/null && break; sleep 1; done`) or replace line 5 with a pointer to "Running the Project" §3. Re-paste and record 29/29. | It is the first thing a copy-pasting reviewer runs; today it prints a false red against a healthy system. | Reproducibility blocker on the front page (release-audit P1-1, still open). | **P0** | Small — under half a day, docs only | none |
+| **FGA2-02** | Resolve open PR #7 with a decision, not drift: **close it**, or **repair and adopt it** — add the four missing setup commands (`init_db.py`, `load_to_db.py`, `init_views.py`, `evaluate_models.py`) to "Run locally", keep its condensed limitations/CI/attribution content, then re-run the verification chain (§1) against the rewritten front page and re-check every internal link before merging. Never leave two competing front pages open during presentation. | As written its setup sequence cannot start the API, so merging hands reviewers a deterministic failure; closing it without a decision leaves the front page stale relative to the demo work. | Front-page contradiction / unverified rewrite risk. | **P0** | Small — 0.5–1 day | same file as FGA2-01 |
+| **FGA2-03** | Obtain one real CI run: resolve the GitHub account billing lock (account action), push, and confirm a green `ci.yml` run on `main`. If it cannot be resolved, keep the workflow, keep the verbatim disclosure, and restate the enforcement claim as "gate defined and executed locally; zero runner runs to date" in README + qa_findings so no sentence implies a green run. | A public repository whose only workflow shows a red X on every commit — including `main` — undercuts the "enforced by CI with zero skips" claim at first glance. | Enforcement credibility (NEW-21). | **P0** | Small — account action; ≤0.5 day engineering | external (account owner) |
+| **FGA2-04** | **Bounded public demonstration** (see §5 for route analysis). Recommended route A: host the existing `Dockerfile` API read-only on one free/cheap container host; host `streamlit-app.py` on Streamlit Community Cloud pointed at it via platform secrets (`API_URL`, demo key). Demo hardening only: pre-fill the Predict page with the documented example payload, seed the demo key from a secret (no typing), add an "About this demo" panel with the §5 honesty labels, and record one click-through (screenshots + responses) in a new `docs/demo.md` with route, commit SHA, date and limits. Then set the repository `homepage` URL and add a README "Demo" section. | The owner needs public, runnable proof; nothing clickable exists today. This is the only remaining D-section gap. | No demonstration / no public proof (D). | **P1** | Medium — 2–4 focused days including hosting setup, verification and write-up | FGA2-01, FGA2-02, FGA2-03 first (so the demo's repo state is the verified one); FGA2-05, FGA2-06 |
+| **FGA2-05** | Document the demo path: add the README section `requirements.txt` already cites (rename the pointer or the section consistently), state `streamlit run streamlit-app.py` + `API_URL`, add `API_URL` to `.env.example` once the demo is supported (the completeness test permits it), and label the path *verified-<date>* instead of *unverified* after the click-through record exists. | A supported run path with zero instructions, plus a dangling cross-file pointer, is exactly the doc/claim drift this repository has spent five phases removing. | Missing demo instructions; dangling pointer (F-05). | **P1** | Small — 0.5–1 day | FGA2-04 route decision |
+| **FGA2-06** | Demo honesty pack, in `docs/demo.md` + README + the app's About panel: read-only demo of the local pipeline; shared public demo key by design; public synthetic IBM sample data; no user-level auth, no rate limiting, no monitoring; host-provided TLS only; `/docs` schema public; free tier may sleep/cold-start; **not** a production deployment and no business-impact claim. | Prevents the demo from silently upgrading the project's claims — the failure mode every prior phase was built to avoid. | Claim accuracy around a new public surface. | **P1** | Small — 0.5 day | FGA2-04 |
+| **FGA2-07** | Add one Streamlit smoke test (`streamlit.testing.v1.AppTest`, already in the pinned dependency set) that drives the five pages against a `TestClient`-backed API URL, asserting each page renders and the Predict page's documented example returns the documented probability. Run it in the local verification record; add to `ci.yml` only if FGA2-03 yields a working runner. | Once the demo is advertised publicly, an untested advertised surface is a credibility gap; this is the cheapest way to close it without new infrastructure. | "Demo unverified" claim on an advertised path. | **P1** | Small — 1 day | FGA2-04 |
+| **FGA2-08** | Give `verify_endpoints.sh` the connectivity preflight its `.ps1` twin already has (fail fast, exit 2) and guard `check_content` with `[ -s "$BODY_FILE" ]`; correct the header's exit-code paragraph. | Without it a dead server yields vacuous `PASS [content]` lines; the script still exits 1, but the printed run misleads. | Acceptance-check honesty (release-audit P2-1). | **P2** | Small — under half a day | none |
+| **FGA2-09** | Housekeeping sweep: CI comment 82/148 → 83/151; append a 2026-10-07 row to `docs/reproduction_record.md` §12's verification table; delete the dangling "Added Containerization" fragment; add one README sentence naming `verify_endpoints.sh` the canonical executed gate and the `.ps1` its unexecuted mirror. | Stale numbers and fragments are the residue a reviewer reads as carelessness in an otherwise immaculate record. | Doc/claim consistency (F-11, release-audit P2-2/3/4/5). | **P2** | Small — under half a day | none |
+| **FGA2-10** | If compose becomes the demo route: make `.env` optional (`env_file: required: false` with defaults) or document the hard requirement in the demo section. | Compose fails out of the box for a user without `.env`; only matters if that path is advertised. | Setup friction on an advertised path. | **P2** | Small — under half a day | FGA2-04 route choice |
+| **FGA2-11** | Footnote the dashboard's "AVG CHURN SCORE" card as an outcome-derived *source* field, never a model input or score — in README/business_report unless Power BI Desktop becomes available to refresh the capture. Do not rebuild the dashboard for this. | The featured visuals otherwise display a leakage-adjacent column as a business KPI without the caveat the rest of the repo insists on. | Claim accuracy in screenshots. | **P2** | Small — under half a day (docs) | none |
+| **FGA2-12** | Owner decision record: with the repo public (and a demo possibly live), restate in one dated paragraph the license/no-license and dataset-retention decisions, including what a demo adds to the exposure surface; change nothing else unless the decision changes. | Rights ambiguity is deliberate today; it must stay deliberate once a demo exists, not drift. | Rights/visibility clarity (NEW-22, F-01). | **P2** | Small — owner decision, 0 engineering | none |
 
-## Explicitly Out of Scope
+Sequencing: FGA2-01 → FGA2-02 → FGA2-03 (parallel owner action) → FGA2-04/05/06/07 → P2 sweep. Total: roughly **4–7 focused days**, of which only FGA2-04 is new scope; everything else is closure.
 
-These are intentionally not part of the flagship consolidation:
+---
 
-- Do **not** remove the default `/customers` pagination or fetch an unbounded list to compute KPIs. If a future use case needs data export, design a separate bounded/streaming export path; it is not needed here.
-- Do not add PostgreSQL, a cloud deployment, Kubernetes, Terraform, scheduling, monitoring, rate limiting, or production MLOps just to satisfy a checklist. Label the service local/un-deployed and the legacy deployment workflow inactive.
-- Do not build another frontend, expand Streamlit, or record a polished marketing video. Existing screenshots plus a short local walkthrough are sufficient; a live deployment is not a finish-line requirement.
-- Do not add SHAP, a new model family, broad hyperparameter tuning, or a threshold-optimization campaign. A simple baseline and clean selection/final-holdout protocol are enough for this scope.
-- Do not claim temporal prediction, prospective churn prevention, measured business lift, user adoption, or production impact. This dataset is a static snapshot and no deployment/outcome study is evidenced.
-- Do not rewrite the API, migrate to an ORM, replace SQLite, or clean every `sys.path` shim and unused placeholder. Remove or clarify only the specific stale references that confuse a reviewer.
-- Do not rewrite the Power BI dashboard from scratch. If model results or tenure categories change, update/verify the affected page and label older captures accurately.
-- Do not rewrite Git history, claim sole authorship of the team system, or reassign mentor/team work. The original pagination feature is an intentional mentor contribution; preserve that credit.
-- Do not add a blanket `LICENSE` until rights to license the shared code and redistribute the third-party dataset are confirmed.
+## 5. Public demonstration workstream (route analysis)
 
-## Flagship Definition of Done
+The previous audit placed "no live deployment, no new frontend, no video" out of scope. The owner has since stated a requirement that overrides *part* of that: public, runnable proof. The override is accepted **only in the bounded form below**; §6 records what remains forbidden.
 
-The project is ready to present as a flagship when every item below is true. The P2 backlog is optional unless the README makes the corresponding stronger claim.
+**Route A — hosted read-only API + Streamlit Community Cloud (recommended).**
+Use the existing two-stage `Dockerfile` (builds DB + model in-image; no host setup) on one container host with a free/cheap tier (e.g. Render, Fly.io, or a Hugging Face Docker space); deploy `streamlit-app.py` on Streamlit Community Cloud, which serves free apps from **public** repositories — already satisfied — with `API_URL` and the demo key supplied as app secrets.
+*Pros:* no new application code beyond FGA2-04's prefill/About panel; uses artifacts that already exist and are documented; two independent public URLs (app + API `/docs`); the repo stays the single source of truth because Streamlit Cloud rebuilds on push. *Cons:* two hosts to label; free tiers sleep; the demo key is public by definition (say so); dataset ships inside the image (consistent with the tracked-CSV decision, say so).
 
-- [ ] **Correct core behavior:** `/customers` remains paginated by default; pagination boundaries are tested; `/kpis` returns full-dataset values through a bounded database aggregate, with a test that would fail if it only sees the first 100 rows.
-- [ ] **Honest acceptance evidence:** the current Bash/PowerShell (or chosen canonical) API checks pass against the current code, fail nonzero on a regression, and do not assert pre-leakage metrics. Historical QA results are labelled as historical, not current sign-off.
-- [ ] **Reproducible setup:** one documented supported Python/dependency environment builds the database, model and evaluation outputs from an identified/approved input; a reviewer can follow the commands from a clean checkout without relying on undocumented local artifacts.
-- [ ] **Enforced full test run:** CI or an equivalently repeatable check runs the artifact-present integration suite with no unexpected skips and verifies the central API/KPI behavior. No deployment job is required.
-- [ ] **Defensible ML result:** target, final feature/exclusion set and leakage correction are explicit; a simple baseline is reported; model selection is separated from the final holdout; the final metrics and confusion matrix are regenerated from that protocol and labeled with the dataset/environment provenance.
-- [ ] **Consistent analytics:** SQL analysis, reusable views, documentation and the relevant dashboard page either share a documented tenure grouping or explain why groupings intentionally differ.
-- [ ] **Accurate portfolio front page:** in a few minutes a reviewer can find the problem, architecture, personal contribution, team/mentor boundaries, results, limitations, local demo path and committed screenshot(s). It clearly says there is no live deployment or measured business impact.
-- [ ] **No contradictory docs:** repository structure, API examples, QA status, setup variables and model/dashboard claims match the current tree and generated outputs. Local links resolve; the repository description/topics remain appropriate; no nonexistent demo URL is advertised.
-- [ ] **Rights and attribution are clear:** the dataset source/version/hash and distribution policy are documented; code licensing is added only if appropriate; mentor/team contributions remain explicitly credited, including pagination and scaffolding.
+**Route B — single hosted service.** One container running both processes (compose/supervisor) or a FastAPI-mounted UI. *Cons:* new orchestration code, and `docker-compose.yml`'s `env_file: .env` hard requirement (F-10); no free-tier advantage over A. Choose only if A's two-host labelling proves painful.
 
-**Stop condition:** once these checks pass, stop. Present the system as a reproducible, local team-capstone integration and QA case study with a corrected, modest churn model comparison—not as a production churn platform.
+**Route C — static evidence site + recorded walkthrough.** GitHub Pages site or a committed terminal GIF/capture set of the 29/29 run and a `/predict` round trip. *Pros:* zero hosting risk, zero secrets. *Cons:* proves nothing runs *now*; a recording can be stale. **Adopt C as a complement to A** (the click-through record in `docs/demo.md` *is* C), never as a substitute while A is achievable.
+
+**Route D — status quo (screenshots + local verification record).** Remains the honest fallback if hosting or the billing account blocks: keep every "not deployed" label and present the local record. Do not let D silently become "we intended a demo".
+
+**Honesty rules for whichever route ships:** (1) the demo is labelled a *read-only demonstration of the local pipeline*, never "production" or "deployed platform"; (2) `docs/demo.md` records URL, commit SHA, date, host, route, and the click-through; (3) README homepage link and metadata `homepage` are set only after (2) exists; (4) the demo's failure modes (sleep, cold start, key rotation) are documented; (5) if the demo host dies and cannot be restored within a bounded attempt, the URL and section are removed or labelled dead — the repository has a documented habit of labelling dead things, keep it.
+
+---
+
+## 6. Explicitly Out of Scope
+
+Tempting changes that would turn consolidation into rebuild. The single deliberate exception to the previous list is the bounded demonstration workstream (FGA2-04…07); everything else stands:
+
+- **Do not make the repository private** to match the brief's premise. History is already public; privacy now would not withdraw it and would break free-tier public hosting.
+- **Do not merge PR #7 as-is**, and do not run two front pages. One verified README or none.
+- **Do not remove `/customers` pagination** or add an unbounded "all rows" mode to compute KPIs.
+- **Do not add PostgreSQL, Kubernetes, Terraform, scheduling, monitoring, rate limiting, user-level auth, TLS termination of our own, or production MLOps.** Host-provided TLS on the demo is the ceiling.
+- **Do not build a browser-side JavaScript client** (would introduce a CORS requirement the server deliberately lacks); the Streamlit client's server-side calls are sufficient.
+- **Do not expand Streamlit into a product**: no new pages, no charts beyond the existing five API views, no auth UI, no persistence. Prefill + About panel + secrets wiring only.
+- **Do not add SHAP, new model families, hyperparameter/threshold tuning, calibration, or resampling.** The protocol is finished and its modesty is the point.
+- **Do not "fix" the Logistic Regression convergence warning** or re-run the protocol to move the numbers; it is recorded as an open problem on purpose.
+- **Do not rewrite the Power BI dashboard**, and do not refresh captures by inventing a Desktop environment; label instead (FGA2-11 is a footnote, not a rebuild).
+- **Do not untrack the CSV or rewrite Git history** to settle rights; the provenance doc's reversal path is the only sanctioned route.
+- **Do not add a blanket LICENSE** until the recorded owner decision says so (team authorship + dataset rights).
+- **Do not weaken the CI zero-skip gate** to obtain a green run; a green-but-shallow run is worse than the disclosed red.
+- **Do not claim sole authorship**, "9-day delivery", temporal generalization, business impact, user adoption, or "production model" anywhere — including in the demo's About panel.
+- **Do not close FGA-09 (structured metrics artifact) or the FGA-10 hardening trio** (import-time model load, tenure>72, regex metrics) as part of this pass; they are open-by-design, disclosed, and no README claim depends on them.
+
+---
+
+## 7. Flagship Definition of Done
+
+Finite checklist. When every box is true, present the repository and **stop**.
+
+- [ ] **Front page paste-works:** the README quick-start (block or its replacement) completes 29/29 on first paste; no open PR offers a competing front page (FGA2-01, FGA2-02).
+- [ ] **Enforcement is real or truthfully restated:** one green `ci.yml` run on `main`, or the disclosure reworded so no sentence implies a runner ever executed (FGA2-03).
+- [ ] **Public demonstration live and labelled:** demo URL(s) reachable; `docs/demo.md` records route, commit SHA, date, host, click-through and limits; README "Demo" section + repository `homepage` set; About panel carries the honesty labels (FGA2-04, FGA2-05, FGA2-06).
+- [ ] **Demo has a test:** the AppTest smoke run passes and is recorded (FGA2-07).
+- [ ] **Verification chain intact:** lock ≡ freeze; report/CSV byte-identical regeneration; 151/0/0 artifact-present; 68/83 fresh; 29/29 smoke; `/kpis` ≡ independent SQL aggregate — all re-recorded in `docs/reproduction_record.md` with this audit's date.
+- [ ] **Evaluation claim unchanged and labelled:** Phase 3 protocol, prior baseline, frozen holdout, published limits; legacy result archived.
+- [ ] **Attribution unchanged:** team/mentor credits, candidate's four PR links, no sole-authorship or delivery-time claims.
+- [ ] **No contradictory docs:** demo instructions exist where `requirements.txt` points; CI counts current; canonical acceptance script named; reproduction table row added; dangling fragment gone (FGA2-05, FGA2-08, FGA2-09).
+- [ ] **Visuals caveated:** the outcome-derived KPI card carries its footnote somewhere a reader of the screenshots will meet it (FGA2-11).
+- [ ] **Rights and visibility deliberate:** dated owner paragraph on public visibility, dataset retention and license status, covering the demo's added exposure (FGA2-12).
+- [ ] **History labelled:** historical screenshots, legacy metrics, historical QA pass, unexecuted `.ps1`, and (if still true) zero-runner CI all remain labelled historical/unexecuted.
+- [ ] **Out-of-scope list untouched:** nothing in §6 was done.
+
+**Stop condition:** when the above hold, present the project as *a reproducible, local, team-capstone integration and QA case study with a corrected, fairly evaluated churn model comparison, plus a labelled read-only public demonstration* — not as a production churn platform. Any further work is a new project proposal, not flagship maintenance.
+
+---
+
+## Appendix A — Crosswalk: 3 October gap audit (FGA-01…FGA-10) and open NEW-xx items
+
+| Prior item | Status at this audit |
+|---|---|
+| FGA-01 `/kpis` whole-table aggregate + regression test | **Closed** — re-verified live and by test |
+| FGA-02 acceptance scripts + QA wording | **Closed for the Bash twin** (29/29, nonzero on regression); `.ps1` still unexecuted → carried as disclosed residual (FGA2-09 naming) |
+| FGA-03 pinned reproduction | **Closed** — lock≡freeze and byte-identical regeneration re-verified |
+| FGA-04 minimal CI | **Committed, never executed** → FGA2-03 (billing) |
+| FGA-05 baseline + selection/holdout split | **Closed** — protocol and report re-verified |
+| FGA-06 tenure-bucket alignment | **Closed** — view/query/docs/tests agree |
+| FGA-07 provenance + distribution policy | **Closed as a recorded decision**; exposure re-examined under public visibility → FGA2-12 |
+| FGA-08 front page + doc reconciliation | **Closed at Phase 5, reopened in part** by F-02/F-03/F-05 → FGA2-01/02/05/09 |
+| FGA-09 structured metrics artifact | **Open by design** — out of scope (§6) |
+| FGA-10 boundary hardening (import-time load, tenure>72, dead env vars) | **Partially closed** (env vars); remainder open by design — out of scope (§6) |
+| NEW-06 `.ps1` unexecuted | Open; CI's `pwsh` step will execute it once FGA2-03 lands |
+| NEW-13 Python 3.12 unvalidated | Open, owner decision; 3.11 remains the only supported runtime |
+| NEW-14 CSV not regenerable from upstream | Open, recorded in provenance |
+| NEW-18 regex-parsed metrics report | Open by design (FGA-09) |
+| NEW-21 billing lock | **FGA2-03** |
+| NEW-22 license/rights | **FGA2-12** |
+
+## Appendix B — Relationship to prior documents
+
+- `FLAGSHIP_GAP_AUDIT.md` (this file, 2026-10-07) is the operative audit. The 2026-10-03 version that defined FGA-01…FGA-10 is superseded; retrieve it from Git history if the original wording is needed.
+- `FLAGSHIP_IMPLEMENTATION_PLAN.md` remains the phase-by-phase implementation record (Phases 1–5) and the home of the NEW-xx backlog.
+- `FLAGSHIP_RELEASE_AUDIT.md` (2026-10-06) remains the independent verification record; §1 of this file is a second, later re-verification and disagrees with it on nothing.
+- `PROJECT_EVIDENCE_CHURN.md` is a dated (2026-09-26) record of the **original team repository**; its metrics are superseded and it says so. `PROJECT_PORTFOLIO_AUDIT.md` (portfolio-level, supplied in the brief) governs cross-project allocation; this audit governs this repository only.
+
+## Appendix C — Live state at audit close
+
+- Background processes left running for the owner's inspection (sandbox only, not deployments): the FastAPI service on 127.0.0.1:8000 (API key used: `demo-key`) and the Streamlit demo on 0.0.0.0:8501 pointed at it. They demonstrate F-06 and are not part of the repository's claimed surface; stop them freely.
+- Generated, gitignored artifacts present locally: `database/churn.db`, `models/best_model.pkl` (regenerated by this audit's verification run).
+- Working tree otherwise unmodified.
