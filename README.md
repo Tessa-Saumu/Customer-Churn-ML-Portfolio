@@ -28,7 +28,7 @@ The extract, transform and load (ETL) scripts clean the comma-separated values (
 
 ## Evaluation and current result
 
-I use a stratified 80/20 split with seed 42. Five-fold cross-validation compares five candidate models on the training portion only, with preprocessing fitted separately inside each fold. A simple classifier that always predicts the majority class provides the baseline. After selecting the winner by ranking performance, I refit it on the training portion and evaluate it once on the untouched 1,409-row holdout. I did not tune the models or the prediction threshold.
+I reserve 20% of the rows for the final test and use the other 80% to compare models. The split keeps similar proportions of churned and retained customers in both parts—called a stratified split—and uses a fixed random seed of 42 so the same rows can be selected again. Five-fold cross-validation divides the training data into five parts: each candidate learns from four parts and is checked on the fifth, rotating through all five. Data preparation is fitted only on the learning part. A classifier that always predicts the majority class provides the baseline. After selecting the winner by its risk-ranking score, I refit it on the training portion and evaluate it on the untouched 1,409-row final test. I did not tune the models or the prediction threshold.
 
 The current recorded run used **Python 3.11.12 on Windows** and selected Logistic Regression:
 
