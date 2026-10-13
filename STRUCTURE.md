@@ -1,6 +1,6 @@
 # Repository Structure
 
-This document is the authoritative, complete reference for how this repository is organized. It is verified directly against the repository's real file tree — not the plan, not an earlier draft.
+This is a layout guide; the detailed tree below records the 6 October 2026 snapshot. The current run record is `docs/current_run.md`; model/report mismatch checks are in `tests/test_model_report_consistency.py`.
 
 For a shorter, narrative summary of the structure aimed at someone just getting started, see `README.md`'s "Repository Structure" section. This document is the detailed, complete counterpart to that summary.
 
@@ -128,7 +128,7 @@ customer-churn-platform/
 ├── requirements.txt                        # Python dependencies — every direct dependency pinned
 ├── requirements.lock.txt                   # Full verified transitive closure (Linux pip freeze), used as requirements.txt's constraints file
 ├── pytest.ini                              # pytest markers (unit/integration) + warning filters
-├── .python-version                         # 3.11.2 — the supported runtime
+├── .python-version                         # 3.11.12 — the canonical recorded runtime
 ├── .env.example                            # Documents API_KEY, MODEL_PATH, MODEL_METRICS_PATH (and names the settings that are NOT env-configurable)
 ├── .gitignore
 ├── .dockerignore
@@ -142,8 +142,6 @@ customer-churn-platform/
 ├── CONTRIBUTORS.md                         # Actual-vs-planned ownership record across the sprint
 ├── Project Specification.md                # Component-by-component contract used during PR review
 ├── PROJECT_EVIDENCE_CHURN.md               # Dated (2026-09-26) evidence record about the ORIGINAL team repository
-├── FLAGSHIP_GAP_AUDIT.md                   # The audit this consolidation works from
-└── FLAGSHIP_IMPLEMENTATION_PLAN.md         # The phase plan and its implementation records
 ```
 
 ---

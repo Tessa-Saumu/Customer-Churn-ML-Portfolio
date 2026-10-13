@@ -1,22 +1,11 @@
 # Python dependencies — Customer Churn Prediction & BI Platform
 #
-# SUPPORTED RUNTIME: CPython 3.11 (verified end-to-end on 3.11.2, Linux x86_64,
-# 2026-10-05). See `.python-version` and the README "Prerequisites" section.
-# The recorded environment, input checksum, commands and results are in
-# `docs/reproduction_record.md`.
-#
-# Every direct dependency below is pinned to the exact version that was verified
-# through the whole local path (ETL -> training/evaluation -> API -> full test
-# suite -> endpoint smoke checks). The `-c` line pulls in `requirements.lock.txt`,
-# which pins the complete transitive closure from that same verified environment,
-# so `pip install -r requirements.txt` resolves deterministically.
-#
-# WHY PINNED (do not relax without re-running the pipeline and recording a new
-# reproduction): FLAGSHIP_GAP_AUDIT.md item FGA-03 records that unpinned
-# dependencies moved the reported model metrics between environments — the same
-# protocol produced Logistic Regression ROC AUC 0.8494 in one environment and
-# 0.8496 in another, and XGBoost accuracy 0.790632 vs 0.784244. Pinning is what
-# makes a reproduced metric interpretable as a result rather than as drift.
+# SUPPORTED RUNTIME: CPython 3.11; canonical recorded run: Windows 3.11.12,
+# 2026-10-13. See .python-version and docs/current_run.md.
+# Direct and transitive library versions are pinned. Native numerical libraries
+# can still produce different model fits across systems. Training binds each
+# saved model to its own report; old Linux results are historical, not a promise
+# of byte-identical Windows/Linux metrics.
 
 -c requirements.lock.txt
 

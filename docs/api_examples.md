@@ -2,20 +2,7 @@
 
 This document provides example requests and responses for the Customer Churn Prediction & BI Platform API.
 
-> **Regenerated 2026-10-06 (Phase 5 / audit item FGA-08).** Every request and
-> response below was captured from a live `uvicorn app.main:app` in the pinned
-> environment (CPython 3.11.2, `requirements.txt` + `requirements.lock.txt`)
-> against a database built from the tracked `data/raw/telco_churn_raw.csv`, and
-> then checked against direct SQL. Two things in the previous version of this
-> file were wrong and are corrected here:
->
-> - The `/customers` example used field names the endpoint does not return
->   (`senior_citizen: 0`, `tenure`). The real response returns `"Yes"`/`"No"`
->   text for `senior_citizen` and `tenure_months`, and it returns **all 33**
->   columns, not a subset.
-> - The `/model-metrics` example showed `0.84 / 0.79 / 0.73 / 0.88`, which
->   matched no run of this project. It now shows the values
->   `evaluation/model_comparison.md` actually contains.
+> **Current canonical examples — 13 October 2026.** Prediction and model-metric responses were captured from the same Windows CPython 3.11.12 model/report pair described in [current_run.md](current_run.md). Authentication, customer and KPI shapes are unchanged. Another supported environment may fit a numerically different model; use its regenerated report, not these example numbers.
 
 ## Authentication
 
@@ -222,7 +209,7 @@ curl -X POST http://localhost:8000/predict \
 
 ```json
 {
-  "churn_probability": 0.7113677247256835,
+  "churn_probability": 0.7076694892896154,
   "churn_prediction": true
 }
 ```
@@ -284,10 +271,10 @@ curl -X GET http://localhost:8000/model-metrics \
 
 ```json
 {
-  "accuracy": 0.7991,
-  "precision": 0.6435,
-  "recall": 0.5455,
-  "roc_auc": 0.8496
+  "accuracy": 0.802,
+  "precision": 0.648,
+  "recall": 0.5561,
+  "roc_auc": 0.8494
 }
 ```
 

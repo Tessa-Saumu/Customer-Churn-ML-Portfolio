@@ -14,7 +14,9 @@ This supersedes the earlier single-split comparison, which used the same holdout
 - **Selection:** 5-fold `StratifiedKFold(shuffle=True, random_state=42)` over the training portion only; criterion is the mean fold ROC AUC (`roc_auc`), the same criterion the earlier comparison used, now applied where it cannot see the holdout. Preprocessing is refit inside every fold.
 - **Candidates:** Logistic Regression (`max_iter=1000`), Decision Tree, Random Forest, XGBoost (`eval_metric="logloss"`) and LightGBM -- all `random_state=42`, default hyperparameters, no tuning.
 - **Baseline:** `DummyClassifier(strategy="prior")`, scored on the same folds. It is reported for reference and is never eligible for selection.
-- **Environment:** Python 3.11.2, pandas 3.0.6, numpy 2.4.6, scikit-learn 1.9.1, xgboost 3.2.0, lightgbm 4.7.0.
+- **Environment:** Python 3.11.12, pandas 3.0.6, numpy 2.4.6, scikit-learn 1.9.1, xgboost 3.2.0, lightgbm 4.7.0.
+
+- **Operating system:** Windows AMD64.
 
 ## Selected Model
 
@@ -22,18 +24,18 @@ This supersedes the earlier single-split comparison, which used the same holdout
 
 ### Performance (untouched holdout, evaluated once)
 
-- Accuracy: 0.7991
-- Precision: 0.6435
-- Recall: 0.5455
-- ROC AUC: 0.8496
-- Confusion Matrix: [[922, 113], [170, 204]] (TN, FP, FN, TP)
+- Accuracy: 0.8020
+- Precision: 0.6480
+- Recall: 0.5561
+- ROC AUC: 0.8494
+- Confusion Matrix: [[922, 113], [166, 208]] (TN, FP, FN, TP)
 
 ### Baseline on the same holdout
 
 | model_name                 |   accuracy |   precision |   recall |   roc_auc | confusion_matrix         |
 |:---------------------------|-----------:|------------:|---------:|----------:|:-------------------------|
-| Logistic Regression        |   0.799148 |    0.643533 | 0.545455 |  0.849562 | [[922, 113], [170, 204]] |
-| DummyClassifier (baseline) |   0.734564 |    0        | 0        |  0.5      | [[1035, 0], [374, 0]]    |
+| Logistic Regression        |   0.801987 |    0.647975 |  0.55615 |  0.849448 | [[922, 113], [166, 208]] |
+| DummyClassifier (baseline) |   0.734564 |    0        |  0       |  0.5      | [[1035, 0], [374, 0]]    |
 
 The baseline predicts the training class prior for every row, so it never predicts churn: its precision and recall are 0 by construction, its accuracy is the majority-class share, and its ROC AUC is 0.5. It is the floor the selected model has to beat -- the model must be better than always guessing the majority class.
 
@@ -41,7 +43,7 @@ The baseline predicts the training class prior for every row, so it never predic
 
 | model_name                 |   accuracy |   precision |   recall |   roc_auc |   roc_auc_std | confusion_matrix          |
 |:---------------------------|-----------:|------------:|---------:|----------:|--------------:|:--------------------------|
-| Logistic Regression        |   0.813278 |    0.67464  | 0.572575 |  0.859133 |    0.0142445  | [[3726, 413], [639, 856]] |
+| Logistic Regression        |   0.812213 |    0.672016 | 0.571237 |  0.859262 |    0.0138648  | [[3722, 417], [641, 854]] |
 | Decision Tree              |   0.743522 |    0.515738 | 0.523077 |  0.673281 |    0.0227209  | [[3407, 732], [713, 782]] |
 | Random Forest              |   0.7989   |    0.65395  | 0.51505  |  0.839627 |    0.00975799 | [[3731, 408], [725, 770]] |
 | XGBoost                    |   0.784347 |    0.608426 | 0.528428 |  0.838703 |    0.00792188 | [[3629, 510], [705, 790]] |
@@ -50,7 +52,7 @@ The baseline predicts the training class prior for every row, so it never predic
 
 Values are means over the five folds; confusion-matrix counts are summed across folds. `roc_auc_std` is the sample standard deviation of the fold ROC AUC values. Per-model fold ROC AUC, in fold order:
 
-- Logistic Regression: 0.8615, 0.8386, 0.8517, 0.8707, 0.8732
+- Logistic Regression: 0.8616, 0.8396, 0.8515, 0.8707, 0.8729
 - Decision Tree: 0.6766, 0.6778, 0.7004, 0.6373, 0.6744
 - Random Forest: 0.8359, 0.8275, 0.8418, 0.8387, 0.8543
 - XGBoost: 0.8342, 0.8272, 0.8420, 0.8432, 0.8469

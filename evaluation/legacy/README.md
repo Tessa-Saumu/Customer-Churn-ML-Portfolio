@@ -2,8 +2,8 @@
 
 These two files are **byte-identical copies** of the model comparison that this
 repository published before Phase 2 (2026-10-05). They are kept so the original
-result stays recoverable and comparable, exactly as `FLAGSHIP_IMPLEMENTATION_PLAN.md`'s
-metric-preservation rule requires.
+result stays recoverable as historical evidence, under the earlier
+evidence-preservation policy.
 
 | File | Copied from | SHA-256 |
 |---|---|---|
@@ -52,17 +52,12 @@ ever stop matching these copies, so the archive cannot drift out of sync silentl
 Historical evidence of the leakage-corrected, single-split comparison. It is no
 longer what `/model-metrics` serves.
 
-**Superseded on 2026-10-06 by Phase 3** (audit item FGA-05), which implemented the
-protocol this archive's description says it lacked: a naive baseline, model
-selection by training-side cross-validation, and one frozen final estimate on the
-untouched holdout. `evaluation/model_comparison.md` is now that protocol's output
-(Logistic Regression, untouched-holdout ROC AUC 0.8496 / accuracy 0.7991; the naive
-prior baseline reaches ROC AUC 0.5), and `README.md` quotes the new numbers. The
-bytes here are unchanged and stay frozen: they are the predecessor result, useful
-for showing exactly what the old selection bias consisted of, and `tests/test_reproducibility.py::TestMetricsArtifacts`
-asserts they keep their recorded hashes. Do not present them as a current estimate
-or compare them directly with the new protocol's numbers.
-
-The `evaluation/reproduction/2026-10-05-pinned-single-split/` folder remains as the
-pinned re-run of *this* protocol; the Phase 3 protocol's run log lives in
+**Historical only.** The single-split comparison above was superseded by a
+training-only cross-validation and frozen-holdout protocol on 2026-10-06.
+That Linux run is also now historical, under
 `evaluation/reproduction/2026-10-06-phase3-cv-holdout/`.
+The current canonical run is described in [docs/current_run.md](../../docs/current_run.md),
+with the current report at [evaluation/model_comparison.md](../model_comparison.md).
+The archived model/report bytes stay frozen; tests guard their recorded hashes.
+Do not present archive metrics as the current estimate or compare the earlier
+selected-on-test protocol directly with the current holdout evaluation.
