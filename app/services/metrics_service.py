@@ -20,16 +20,14 @@ are intentionally not exposed here, since adding them would change the
 endpoint's response shape, which Issue #14 explicitly forbids without
 cross-team confirmation (Project_Specification.md, section 4).
 
-NOTE FOR REVIEWERS: this parses the "### Performance" section under
-"## Selected Model" in model_comparison.md. If Latifah's report format
-changes, this parser breaks. Recommend Issue #11 (or a follow-up)
-produce a structured evaluation/model_comparison.json alongside the
-Markdown report, so this regex-based parsing can be replaced with a
-plain json.load(). Flagging rather than silently living with the
-fragility.
+The loaded prediction pipeline carries its evaluation metrics and the exact
+report checksum. This service refuses a report from another fit, even if its
+Markdown has valid-looking numbers. Regenerate model and report together and
+restart the server after training.
 """
 
 import logging
+import hashlib
 import os
 import re
 from pathlib import Path
@@ -77,7 +75,17 @@ def get_model_metrics() -> dict[str, float]:
             "Run the training pipeline (training/evaluate_models.py) first."
         )
 
-    report_text = MODEL_METRICS_PATH.read_text(encoding="utf-8")
+    from predict import model
+
+    report_bytes = MODEL_METRICS_PATH.read_bytes()
+    metadata = getattr(model, "evaluation_metadata_", None)
+    if not metadata or metadata.get("report_sha256") != hashlib.sha256(report_bytes).hexdigest():
+        raise ValueError(
+            "The evaluation report does not belong to the loaded model. "
+            "Run training/evaluate_models.py to regenerate both artifacts, "
+            "then restart the API."
+        )
+    report_text = report_bytes.decode("utf-8")
 
     metrics: dict[str, float] = {}
     for key, pattern in _METRIC_PATTERNS.items():
@@ -89,6 +97,9 @@ def get_model_metrics() -> dict[str, float]:
                 "Report format may have changed."
             )
         metrics[key] = float(match.group(1))
+
+    if metrics != metadata["metrics"]:
+        raise ValueError("The model's saved metrics do not match its evaluation report.")
 
     logger.info("Loaded real model metrics from %s: %s", MODEL_METRICS_PATH, metrics)
     return metrics

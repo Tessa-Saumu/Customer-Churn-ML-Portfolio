@@ -214,6 +214,7 @@ Check-Endpoint `
 
 Check-Endpoint `
     -Description "GET /customers with API key" `
+    -Uri "$BASE_URL/customers" `
     -Headers $headers `
     -ExpectedStatus 200
 
@@ -254,6 +255,7 @@ Check-Endpoint `
 
 Check-Endpoint `
     -Description "GET /kpis with API key" `
+    -Uri "$BASE_URL/kpis" `
     -Headers $headers `
     -ExpectedStatus 200
 
@@ -317,6 +319,7 @@ else {
 
 Check-Endpoint `
     -Description "GET /model-metrics with API key" `
+    -Uri "$BASE_URL/model-metrics" `
     -Headers $headers `
     -ExpectedStatus 200
 

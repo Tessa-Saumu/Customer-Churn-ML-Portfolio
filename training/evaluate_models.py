@@ -9,8 +9,7 @@ Until 2026-10-06 this module trained all five candidates on one stratified
 reported "test" metric was also the selection metric, so it was not an
 untouched final estimate, and no baseline was ever reported.
 
-The protocol implemented here is the one FLAGSHIP_IMPLEMENTATION_PLAN.md
-Phase 3 prescribes:
+The evaluation protocol is documented in docs/current_run.md:
 
 1. One fixed stratified 80/20 outer split (`training/train_test_split.py`,
    `RANDOM_STATE = 42`). The 20% holdout is *frozen*: it is not touched until
@@ -305,7 +304,7 @@ def write_comparison_report(
     environment = ", ".join(f"{name} {value}" for name, value in versions.items())
     input_checksum = _sha256_or_unavailable(INPUT_CSV)
 
-    with report_path.open("w", encoding="utf-8") as file:
+    with report_path.open("w", encoding="utf-8", newline="\n") as file:
         file.write("# Customer Churn Model Comparison\n\n")
 
         file.write("**Protocol:** Phase 3 (2026-10-06) -- model selection by "
@@ -371,6 +370,7 @@ def write_comparison_report(
             f"Python {platform.python_version()}, {environment}.\n\n"
         )
 
+        file.write(f"- **Operating system:** {platform.system()} {platform.machine()}.\n\n")
         file.write("## Selected Model\n\n")
         file.write(f"**{selected['model_name']}**\n\n")
         file.write("### Performance (untouched holdout, evaluated once)\n\n")
@@ -479,10 +479,10 @@ def evaluate_all_models(report_dir: Path | str | None = None) -> pd.DataFrame:
 
     report_dir
         Directory that `model_comparison.md` is written to. The default (None)
-        keeps the historical behaviour: `Path("evaluation")`, resolved against
+        keeps the canonical behaviour: `Path("evaluation")`, resolved against
         the current working directory -- i.e. run this from the repo root, as
         the README documents. The parameter lets the test suite redirect the
-        report so `pytest` never rewrites the tracked file (NEW-02).
+        report AND model so tests cannot overwrite either canonical artifact.
     """
     logger.info("Splitting the dataset into the outer training/holdout portions...")
     X_train, X_test, y_train, y_test, _unused_preprocessor = split_training_data()
@@ -533,16 +533,6 @@ def evaluate_all_models(report_dir: Path | str | None = None) -> pd.DataFrame:
         ]
     )
 
-    # save model
-    joblib.dump(
-        best_model,
-        MODEL_PATH / "best_model.pkl",
-    )
-
-    logger.info(
-        "Best model (%s) saved successfully.",
-        best_model_name,
-    )
     logger.info("Evaluation complete.\n%s", holdout_results)
 
     # Generate a markdown report for model comparison
@@ -551,6 +541,26 @@ def evaluate_all_models(report_dir: Path | str | None = None) -> pd.DataFrame:
     report_path = REPORT_DIR / "model_comparison.md"
     logger.info("Writing model comparison report to %s", report_path)
     write_comparison_report(report_path, selection_results, holdout_results)
+
+    # Keep prediction and metrics tied to this exact evaluation. A restored or
+    # edited report must never describe a different model silently.
+    best_model.evaluation_metadata_ = {
+        "report_sha256": hashlib.sha256(report_path.read_bytes()).hexdigest(),
+        "input_sha256": _sha256_or_unavailable(INPUT_CSV),
+        "metrics": {
+            key: round(float(holdout_results.iloc[0][key]), 4)
+            for key in ("accuracy", "precision", "recall", "roc_auc")
+        },
+    }
+    # Redirect BOTH artifacts during tests/experiments. Redirecting just the
+    # report used to overwrite the serving model with another run's pickle.
+    model_path = (
+        REPORT_DIR / "best_model.pkl"
+        if report_dir is not None
+        else MODEL_PATH / "best_model.pkl"
+    )
+    joblib.dump(best_model, model_path)
+    logger.info("Best model (%s) saved successfully to %s", best_model_name, model_path)
 
     return selection_results
 

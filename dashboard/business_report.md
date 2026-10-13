@@ -1,11 +1,16 @@
 # Customer Churn Dashboard Business Report
 
+> **Historical team dashboard report.** All prediction metrics and model-related
+> recommendations below belong to the earlier evaluation described in this
+> document. The current canonical model/report is [docs/current_run.md](../docs/current_run.md),
+> with holdout scores in [evaluation/model_comparison.md](../evaluation/model_comparison.md).
+> This document and the imported Power BI file are not refreshed current model evidence.
+
 > **Post-sprint note (2026-10-06, portfolio owner — not part of Joyce's original report).**
 > The model figures in section 5 are the **legacy single-split** result and are kept
 > as the historical record of the leakage-corrected evaluation this report announced.
 > Phase 3 replaced the evaluation protocol (training-side cross-validation for
-> selection, one frozen holdout evaluation, plus a naive baseline), so the current
-> numbers differ: Logistic Regression on the untouched holdout is accuracy 0.7991 /
+> selection, one frozen holdout evaluation, plus a naive baseline), so the numbers then reported differed: Logistic Regression on the untouched holdout is accuracy 0.7991 /
 > precision 0.6435 / recall 0.5455 / ROC AUC 0.8496, against a prior baseline whose
 > ROC AUC is 0.5. See [`evaluation/model_comparison.md`](../evaluation/model_comparison.md)
 > and [`docs/reproduction_record.md`](../docs/reproduction_record.md) §12. The
@@ -174,7 +179,7 @@ Develop targeted retention campaigns for customers on Month-to-Month contracts b
 
 ## Recommendation 2
 
-Use the Logistic Regression model's churn predictions as one input for prioritizing outreach to at-risk customers, alongside the dashboard's descriptive churn drivers (contract type, tenure, service usage). Given the model's current recall of 55.62%, do not rely on it as the sole method for identifying at-risk customers — combine it with the tenure and contract-type segments identified in the Churn Drivers page.
+Use the Logistic Regression model's churn predictions as one input for prioritizing outreach to at-risk customers, alongside the dashboard's descriptive churn drivers (contract type, tenure, service usage). Given the historical model's recall of 55.62%, do not rely on it as the sole method for identifying at-risk customers — combine it with the tenure and contract-type segments identified in the Churn Drivers page.
 
 ---
 

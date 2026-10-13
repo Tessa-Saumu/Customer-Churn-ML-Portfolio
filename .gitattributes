@@ -1,0 +1,7 @@
+# Preserve provenance hashes and generated evidence across Git checkouts.
+*.csv text eol=lf
+*.md text eol=lf
+*.sh text eol=lf
+# Historical archives have their original byte-level hashes; never normalize.
+evaluation/legacy/** -text
+evaluation/reproduction/** -text

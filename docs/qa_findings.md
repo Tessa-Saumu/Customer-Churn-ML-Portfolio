@@ -1,5 +1,7 @@
 # QA Findings
 
+> **HISTORICAL RECORD:** the findings and results below describe their dated earlier runs. They are retained for traceability, not as current results or current serving artifacts. The canonical run is [docs/current_run.md](current_run.md), with current metrics in [evaluation/model_comparison.md](../evaluation/model_comparison.md).
+
 This document is maintained across four issues: **Issue #13** (ETL
 & Database), **Issue #16** (FastAPI), **Issue #17** (Model Training
 & Prediction), and **Issue #19** (Full Regression Pass — added

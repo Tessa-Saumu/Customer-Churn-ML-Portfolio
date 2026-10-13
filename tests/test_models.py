@@ -675,9 +675,8 @@ class TestTrainingPipelineEndToEnd:
         metrics artifact (NEW-02). The final assertion below is the regression
         guard for that: the tracked report must be byte-identical afterwards.
 
-        The model pickle is still written to the repo's `models/` directory --
-        it is gitignored, and the next test in this class deliberately reloads
-        it to close the training -> prediction loop.
+        Both output artifacts are redirected so a test cannot replace the
+        serving model while leaving its report behind.
         """
         from training.evaluate_models import (
             BASELINE_MODEL_NAME,
@@ -685,6 +684,7 @@ class TestTrainingPipelineEndToEnd:
         )
 
         tracked_report_before = _tracked_report_sha256()
+        serving_model_before = hashlib.sha256(MODEL_PATH.read_bytes()).hexdigest()
         report_dir = tmp_path / "evaluation"
 
         results_df = evaluate_all_models(report_dir=report_dir)
@@ -710,11 +710,21 @@ class TestTrainingPipelineEndToEnd:
         assert (results_df["n_folds"] == CV_N_SPLITS).all()
         assert (results_df["fold_roc_auc"].apply(len) == CV_N_SPLITS).all()
 
-        assert MODEL_PATH.exists()
+        fresh_model = joblib.load(report_dir / "best_model.pkl")
+        assert hashlib.sha256(MODEL_PATH.read_bytes()).hexdigest() == serving_model_before
         assert METRICS_PATH.exists()
         # The report this run produced is the redirected one, not the tracked one.
         report_path = report_dir / "model_comparison.md"
         assert report_path.exists()
+        assert fresh_model.evaluation_metadata_["report_sha256"] == hashlib.sha256(report_path.read_bytes()).hexdigest()
+        from training.train_test_split import split_training_data
+        from training.evaluate_models import evaluate_model
+        _, X_holdout, _, y_holdout, _ = split_training_data()
+        observed = evaluate_model("selected", fresh_model, X_holdout, y_holdout)
+        assert fresh_model.evaluation_metadata_["metrics"] == {
+            key: round(observed[key], 4)
+            for key in ("accuracy", "precision", "recall", "roc_auc")
+        }
         report_text = report_path.read_text(encoding="utf-8")
         assert "## Selected Model" in report_text
         assert "## Model selection" in report_text
@@ -725,15 +735,13 @@ class TestTrainingPipelineEndToEnd:
             "evaluation/model_comparison.md. Training output must be redirected "
             "(evaluate_all_models(report_dir=...)) so pytest never rewrites a "
             "committed metrics artifact -- see NEW-02 in "
-            "FLAGSHIP_IMPLEMENTATION_PLAN.md."
+            "docs/current_run.md."
         )
 
-    def test_freshly_trained_artifact_loads_and_predicts(self) -> None:
+    def test_canonical_artifact_loads_and_predicts(self) -> None:
         """
-        Confirms the artifact this same test run just produced loads
-        and predicts successfully -- closing the loop from training
-        through to a real prediction, not just checking the file
-        exists.
+        Confirms the canonical serving artifact still loads and predicts
+        after redirected training; it must not have been replaced by tests.
         """
         import importlib
         import predict as predict_module
