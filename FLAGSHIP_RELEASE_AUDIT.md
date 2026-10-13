@@ -1,5 +1,7 @@
 # Flagship Release Audit — Customer Churn Prediction & BI Platform
 
+> **Current reconciliation — 2026-10-13:** original findings below describe their dated snapshots. Prior merges through `a8326e9` resolved the P0/P1 consolidation work and the README startup race. The Windows checkout and PowerShell acceptance defects discovered in this review are repaired; see the appended current verification. Historical Linux metrics are preserved; Windows numerical identity is not claimed.
+
 **Audit date:** 6 October 2026
 **Auditor:** independent re-verification pass (fresh environment, fresh clone, live HTTP runs)
 **Target:** `Tessa-Saumu/Customer-Churn-ML-Portfolio`, branch `arena/d1941adb-customer-churn-ml-portfolio`, HEAD `11bb55a` ("Flagship consolidation Phase 4 + 5", merge of PR #5)
@@ -130,3 +132,37 @@ There are **no P0 problems**. The repository may be presented now, exactly as th
 **However, engineering should not stop yet for one reason only: P1-1.** The front-page five-command block hands a copy-pasting reviewer a deterministic false failure. It is a one-line documentation fix. Make that single edit (and, if convenient, the external billing action in P2-6, which is account administration rather than engineering), and then **stop**: every remaining item in §5 is optional P2 polish, the README makes no claim that depends on any of it, and pursuing them would add churn to a repository whose principal asset is now its demonstrable honesty.
 
 *Post-fix state prediction:* with P1-1 applied, all nine definition-of-done items read PASS except item 2 and item 4, which remain PARTIAL solely because (i) the PowerShell twin cannot be executed in any available environment and (ii) the committed CI gate cannot start on a billing-locked account — both disclosed, both outside the repository's code, and both removable only by running the existing `pwsh` CI step once the account is restored.
+
+
+## Current verification and bounded next steps — 2026-10-13
+
+Reviewed personal repository `Tessa-Saumu/Customer-Churn-ML-Portfolio`, source main `a8326e94e169cd8e07f7db3b6341d7b347fc3586`. No access to the group repository. Prior work is evidenced by commits `b86c1b9` (KPI population and acceptance contracts), `c8ee4ac` (runtime/input), `45b9be7` (training-only CV, baseline and tenure definitions), `11bb55a` (CI and packaging), release-audit merge `ceec078`, and README merge `a8326e9`. Commit evidence establishes repository work, not which AI authored it.
+
+### New findings and repairs
+
+- **Resolved P1, Windows checkout:** default Git CRLF conversion changed the raw input checksum, archived evidence bytes and generated CSV. `.gitattributes` now preserves LF for active CSV/Markdown/Bash files and disables conversion for byte-hashed historical archive directories. Source CSV content and historical metrics are unchanged. The report writer explicitly emits LF.
+- **Resolved P1, current README regression:** the #7 rewrite omitted the exact supported-runtime wording enforced by the existing reproducibility test. The README now names **Python 3.11** explicitly.
+- **Resolved P1, PowerShell acceptance mirror:** three authenticated GET checks omitted their URI (`/customers`, `/kpis`, `/model-metrics`), producing 11 passes, 17 failures and 1 skip against a healthy API. The URI arguments are restored; all 29 checks now pass on PowerShell 7.6.5.
+- **Already resolved before this review:** release-audit P1-1 startup race. The current README uses separate API and acceptance terminals; do not repeat that repair.
+- Corrected the stale fresh-state suite count in the CI comment (83 of 151).
+
+### Current-run evidence (Windows, CPython 3.11.12)
+
+Exact 3.11.2 was unavailable here; this is a compatible runtime check, **not** a fresh repetition of the recorded Linux 3.11.2 reproduction.
+
+| Check | Result |
+|---|---|
+| Isolated install from `requirements.txt` | success, pinned direct versions |
+| Fresh checkout suite before fixes | 60 passed, 83 skipped, 8 failed (7 checkout-byte effects, 1 README wording) |
+| ETL, views, training, CSV export | success; 7,043 customers; selected Logistic Regression |
+| Artifact-present suite after repairs | **151 passed, 0 failed, 0 skipped** (134.08s) |
+| Live PowerShell 7.6.5 acceptance after URI repairs | **29 passed, 0 failed, 0 skipped**, exit 0 |
+| Deliberate `EXPECTED_CUSTOMER_COUNT=100` regression | exit **1** |
+| Missing API key | exit **2** |
+| Input SHA-256 after LF restoration | `e984530b5b1c67a0f2abe6496e65b99ab8d163d7e1b4c83fc1c3e2d71db57a34` |
+
+Windows retraining yields holdout accuracy 0.8020, precision 0.6480, recall 0.5561, ROC AUC 0.8494 (matrix `[[922,113],[166,208]]`), rather than the historical Linux 0.7991/0.6435/0.5455/0.8496. The same pinned libraries still do not guarantee numerical identity across operating systems/runtime patches, especially with the documented non-converged LR fit. No tuning was performed. Windows-generated report and model were checked together by the 29-check acceptance script; committed Linux report/CSV were then restored unchanged. Regenerate before serving this checkout to ensure the local model and report refer to the same run.
+
+### Finish line / remaining steps
+
+Recruiter-ready as a **public, local mentored-team integration and leakage-aware modelling case study**, with current verification explicitly scoped. No new feature phases needed. Keep dataset rights unconfirmed, historical ownership boundaries, limited holdout recall, convergence, and undeployed status visible. Obtain a genuinely executed GitHub Actions job (latest current entry `37604255332` is still failure; no green CI claimed). The data-redistribution/licensing decision remains owner work; this review neither clears rights nor republishes data. Desktop refresh, Docker and Streamlit remain unverified. Future modelling/serving hardening stays P2, outside this bounded package.

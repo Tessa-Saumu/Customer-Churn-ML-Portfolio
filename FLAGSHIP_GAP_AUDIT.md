@@ -1,5 +1,7 @@
 # Flagship Gap Audit — Customer Churn Prediction & BI Platform
 
+> **Current reconciliation — 2026-10-13:** original findings below describe their dated snapshots. Prior merges through `a8326e9` resolved the P0/P1 consolidation work and the README startup race. The Windows checkout and PowerShell acceptance defects discovered in this review are repaired; see the appended current verification. Historical Linux metrics are preserved; Windows numerical identity is not claimed.
+
 **Audit date:** 3 October 2026
 **Target:** `Tessa-Saumu/Customer-Churn-ML-Portfolio` (personal portfolio copy of a mentored team capstone)
 **Snapshot reviewed:** local tree at `1fe383a`
@@ -88,3 +90,11 @@ The project is ready to present as a flagship when every item below is true. The
 - [ ] **Rights and attribution are clear:** the dataset source/version/hash and distribution policy are documented; code licensing is added only if appropriate; mentor/team contributions remain explicitly credited, including pagination and scaffolding.
 
 **Stop condition:** once these checks pass, stop. Present the system as a reproducible, local team-capstone integration and QA case study with a corrected, modest churn model comparison—not as a production churn platform.
+
+
+
+## Current reconciliation and remaining implementation — 2026-10-13
+
+Prior phases are complete through `a8326e9`; the release audit's README-startup-race P1 was already resolved by the subsequent rewrite. This review repaired Git CRLF checkout effects on byte-hashed input/evidence, restored explicit supported Python wording, forced LF report output, and restored three omitted URI arguments in the PowerShell acceptance mirror. Windows CPython 3.11.12: artifact-present suite **151 passed, 0 skipped**; live PowerShell 7.6.5 acceptance **29 passed**, deliberate regression exit 1, missing-key exit 2. Windows retraining differs slightly from historical Linux metrics, which are preserved unchanged.
+
+Full command results, commit evidence, exact failures and reproducibility limitations are in [the current release-audit verification](FLAGSHIP_RELEASE_AUDIT.md#current-verification-and-bounded-next-steps--2026-10-13). No new phases or model tuning needed. Remaining owner/external steps: dataset redistribution/licensing decision; one executed green GitHub Actions job; optional Desktop/Docker/Streamlit verification. Keep these limits visible and present the public repo as a local mentored-team integration and leakage-aware evaluation case study. No group repository was accessed.

@@ -1,5 +1,7 @@
 # Flagship Implementation Plan — Customer Churn Prediction & BI Platform
 
+> **Current reconciliation — 2026-10-13:** original findings below describe their dated snapshots. Prior merges through `a8326e9` resolved the P0/P1 consolidation work and the README startup race. The Windows checkout and PowerShell acceptance defects discovered in this review are repaired; see the appended current verification. Historical Linux metrics are preserved; Windows numerical identity is not claimed.
+
 **Source of scope:** [`FLAGSHIP_GAP_AUDIT.md`](FLAGSHIP_GAP_AUDIT.md)
 **Plan type:** minimum consolidation needed for the audit's Flagship Definition of Done
 **Implementation status:** **Phases 1–5 complete (2026-10-05 → 2026-10-06).** All work below was done on the pinned environment (CPython 3.11.2). One caveat is recorded plainly and not papered over: Phase 4's CI workflow is committed and **every step of it was executed locally, in order, and passed**, but GitHub Actions refused to *start* a job for this account ("locked due to a billing issue"), so **no green CI run is claimed** — that is the one Flagship DoD item that remains externally blocked. See the [Phase 1](#phase-1-implementation-record), [Phase 2](#phase-2-implementation-record), [Phase 3](#phase-3-implementation-record), [Phase 4](#phase-4-implementation-record) and [Phase 5](#phase-5-implementation-record) implementation records below.
@@ -829,3 +831,11 @@ Stop investing additional engineering time when any of the following applies:
 6. **Further work is only product expansion:** no new database, hosted service, model family, monitoring, user interface, or business-impact study is needed to complete this portfolio case. Keep those ideas out of the flagship budget.
 
 **Finish line:** once Phase 5 acceptance criteria pass, freeze the scope and present the project as a reproducible local team-capstone integration/QA case study with a leakage-aware, fairly evaluated churn comparison—not as a production churn platform.
+
+
+
+## Current reconciliation and remaining implementation — 2026-10-13
+
+Prior phases are complete through `a8326e9`; the release audit's README-startup-race P1 was already resolved by the subsequent rewrite. This review repaired Git CRLF checkout effects on byte-hashed input/evidence, restored explicit supported Python wording, forced LF report output, and restored three omitted URI arguments in the PowerShell acceptance mirror. Windows CPython 3.11.12: artifact-present suite **151 passed, 0 skipped**; live PowerShell 7.6.5 acceptance **29 passed**, deliberate regression exit 1, missing-key exit 2. Windows retraining differs slightly from historical Linux metrics, which are preserved unchanged.
+
+Full command results, commit evidence, exact failures and reproducibility limitations are in [the current release-audit verification](FLAGSHIP_RELEASE_AUDIT.md#current-verification-and-bounded-next-steps--2026-10-13). No new phases or model tuning needed. Remaining owner/external steps: dataset redistribution/licensing decision; one executed green GitHub Actions job; optional Desktop/Docker/Streamlit verification. Keep these limits visible and present the public repo as a local mentored-team integration and leakage-aware evaluation case study. No group repository was accessed.

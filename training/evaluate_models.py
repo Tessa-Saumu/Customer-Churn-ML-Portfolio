@@ -305,7 +305,7 @@ def write_comparison_report(
     environment = ", ".join(f"{name} {value}" for name, value in versions.items())
     input_checksum = _sha256_or_unavailable(INPUT_CSV)
 
-    with report_path.open("w", encoding="utf-8") as file:
+    with report_path.open("w", encoding="utf-8", newline="\n") as file:
         file.write("# Customer Churn Model Comparison\n\n")
 
         file.write("**Protocol:** Phase 3 (2026-10-06) -- model selection by "

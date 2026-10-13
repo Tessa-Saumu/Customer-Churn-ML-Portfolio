@@ -72,7 +72,7 @@ The current protocol and complete metrics are in [`evaluation/model_comparison.m
 - **Validation:** ETL cleaning rules, SQLite `CHECK` constraints, Pydantic request validation, and regression tests cover important data and API boundaries.
 - **API security and errors:** `X-API-Key` protects the four non-health endpoints; invalid requests return validation errors. The application uses Python's standard logging. This is a shared API key, not user-level authentication.
 - **Tests:** with generated database/model artifacts present, the verified suite result was **151 passed, 0 failed, 0 skipped**. On a fresh checkout, **68 passed and 83 skipped** because artifact-dependent tests have nothing to exercise until the pipeline runs.
-- **CI:** `.github/workflows/ci.yml` builds the artifacts, checks the pinned dependency closure, and requires a zero-skip test run. GitHub Actions has not executed a job for this repository: the account was blocked by a billing issue before any job steps started. The pinned install, artifact build, full suite, and Bash smoke checks were verified locally during the release audit. The PowerShell smoke-test script itself remains unexecuted.
+- **CI:** `.github/workflows/ci.yml` builds the artifacts, checks the pinned dependency closure, and requires a zero-skip test run. GitHub Actions has not executed a job for this repository: the account was blocked by a billing issue before any job steps started. The pinned install, artifact build, full suite, and Bash smoke checks were verified locally during the release audit. The PowerShell mirror was verified on Windows with PowerShell 7.6.5 on 13 October 2026 after restoring three missing endpoint URIs (29 passed; regression exit 1; missing-key exit 2).
 - **Secrets:** `.env` and local variants are ignored by Git; only `.env.example` with a placeholder key is tracked. No `.env` file is committed.
 
 ## Results
@@ -104,7 +104,7 @@ There is **no live deployment and no recorded video**. The local demo path is th
 
 ## Run locally
 
-The end-to-end instructions below were verified on **Linux with CPython 3.11.2**. Other operating systems and Python versions were not independently verified. For endpoint smoke checks, install `curl` and `jq`.
+Supported runtime: **Python 3.11**. The end-to-end instructions below were verified on **Linux with CPython 3.11.2**. Other operating systems and Python versions were not independently verified. For endpoint smoke checks, install `curl` and `jq`.
 
 ```bash
 git clone https://github.com/Tessa-Saumu/Customer-Churn-ML-Portfolio.git
@@ -138,7 +138,7 @@ In a second terminal, run the Bash acceptance checks using the same key as `.env
 API_KEY=local-dev-key ./scripts/verify_endpoints.sh
 ```
 
-The recorded run returned **29 passed, 0 failed, 0 skipped**. The script defaults to `http://localhost:8000` and exits nonzero for a failed or un-runnable check. The PowerShell counterpart is present but has not been executed. Training creates the gitignored database and model artifact; running it in the pinned environment regenerates the committed evaluation report byte-for-byte.
+The recorded run returned **29 passed, 0 failed, 0 skipped**. The script defaults to `http://localhost:8000` and exits nonzero for a failed or un-runnable check. On Windows with PowerShell 7, set `$env:API_KEY="local-dev-key"` and run `./scripts/verify_endpoints.ps1` from a second terminal after the server is ready. This mirror was verified on 13 October 2026 (29 passed). A Windows CPython 3.11.12 check also passed all 151 tests, but produced slightly different LR metrics; see the current verification in `FLAGSHIP_RELEASE_AUDIT.md`. Rebuild the model and report together rather than mixing runs. Training creates the gitignored database and model artifact; running it in the pinned environment regenerates the committed evaluation report byte-for-byte.
 
 ## Repository structure
 

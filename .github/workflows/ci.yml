@@ -5,7 +5,7 @@
 # The project's value is a multi-step pipeline (ETL -> SQLite -> training ->
 # FastAPI -> tests), and the test suite could previously exit green while every
 # artifact-dependent integration test silently skipped: on a fresh clone with no
-# database and no model, 82 of 148 tests skip. A green run therefore did not
+# database and no model, 83 of 151 tests skip. A green run therefore did not
 # mean the system worked. This workflow builds the artifacts first and then
 # *requires* zero skips, so the artifact-present path is what is actually
 # verified.
