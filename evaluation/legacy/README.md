@@ -35,8 +35,9 @@ ever stop matching these copies, so the archive cannot drift out of sync silentl
 - **Bytes taken from:** commit `b86c1b9dc68a3f8dafbf7df14fcbb3f13c78bcec` of this
   portfolio repository (the base of the Phase 1/Phase 2 work). This checkout is
   shallow, so the upstream commit that last regenerated these exact bytes cannot be
-  confirmed locally; `PROJECT_EVIDENCE_CHURN.md` attributes the leakage-free rerun to
-  `c2ea20e` (2026-07-24) in the original team repository.
+  confirmed locally. A dated historical evidence record attributes the leakage-free
+  rerun to `c2ea20e` (2026-07-24); that attribution was not independently rechecked
+  during this portfolio cleanup.
 - **Environment: unknown and unpinned.** These values were produced before
   dependencies were pinned. That matters: the same protocol in the pinned
   environment gives Logistic Regression accuracy 0.799148 / ROC AUC 0.849562 rather

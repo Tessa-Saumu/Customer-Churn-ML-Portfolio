@@ -3,9 +3,7 @@
 > **HISTORICAL RECORD:** the findings and results below describe their dated earlier runs. They are retained for traceability, not as current results or current serving artifacts. The canonical Windows CPython 3.11.12 run is [docs/current_run.md](current_run.md), with current metrics in [evaluation/model_comparison.md](../evaluation/model_comparison.md).
 
 **Sections 1–11:** Phase 2, 2026-10-05 (audit items FGA-03 and FGA-07).
-**Section 12:** Phase 3, 2026-10-06 (audit items FGA-05 and FGA-06) — the current,
-superseding evaluation protocol and its results. Where the two disagree, §12 is
-current and §§4–8 are the Phase 2 record being described.
+**Section 12:** Phase 3, 2026-10-06 (audit items FGA-05 and FGA-06) — the protocol and results that superseded Phase 2 on that date. Within this historical record, §12 replaces §§4–8; neither is the current Windows serving run.
 **What this document is:** the historical record of *one* supported
 runtime, *one* pinned dependency set, the exact input, the exact commands, and the
 results they produced — so a reviewer can tell whether a changed metric is a bug, a
@@ -355,7 +353,7 @@ stop conditions, that is the acceptable outcome of a prespecified protocol.
 | Report contents | protocol, seeds, fold count, candidate list, baseline, target, exclusions, engineered features, input SHA-256, package versions and limits are all written by the code (`write_comparison_report`), not by hand |
 | A fresh process calling `evaluate_all_models(report_dir=…)` | report **byte-identical** to the tracked one (`e035eb78…`) — the reproducibility claim is not just "same process twice" |
 | CSV generation | `scripts/generate_model_comparison_csv.py` reproduces the committed CSV **byte-for-byte** (LF endings), and a test asserts it |
-| Negative controls | 9 deliberate breaks of the new guarantees (holdout-shaped parameter, CV widened to all rows, fake/eligible baseline, report's first metric block switched to CV means, old four-range SQL, moved view boundary, CRLF in the CSV, CRLF restored in the generator) were each applied in a scratch copy and each made its guard fail. One of them initially *passed*, exposing a vacuous line-ending assertion in a new test; the guard was rewritten to check raw bytes and re-verified. Detail in the [centrally archived Phase 3 record](https://github.com/Tessa-Saumu/professional-consolidation/tree/main/portfolio-artifacts/2026-10-13/audits/churn) |
+| Negative controls | 9 deliberate breaks of the new guarantees (holdout-shaped parameter, CV widened to all rows, fake/eligible baseline, report's first metric block switched to CV means, old four-range SQL, moved view boundary, CRLF in the CSV, CRLF restored in the generator) were each applied in a scratch copy and each made its guard fail. One of them initially *passed*, exposing a vacuous line-ending assertion in a new test; the guard was rewritten to check raw bytes and re-verified. The technical guards remain in `tests/test_models.py`, `tests/test_reproducibility.py` and `tests/test_sql_views.py` |
 
 ### Files changed in Phase 3
 

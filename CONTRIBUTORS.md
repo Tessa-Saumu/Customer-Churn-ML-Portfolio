@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project was completed collaboratively by a multidisciplinary team. While the README documents the planned ownership of each workstream, this document records the implementation contributions as they occurred during the project, including changes made as work evolved.
+This project was completed collaboratively by a multidisciplinary team. This document records original workstream ownership and implementation contributions as they occurred, including changes made as work evolved. Later portfolio repairs do not change those team boundaries.
 
 ## Contributors
 
@@ -91,7 +91,15 @@ This project was completed collaboratively by a multidisciplinary team. While th
 
 ---
 
+### Adeyeri Michael
+**Role:** Mentor and Final Reviewer
+
+- Supplied scaffolding and contributed customer pagination.
+- Reviewed and merged team changes, including final sign-off.
+
+---
+
 ## Notes
 
-- The README contains the planned project ownership and team responsibilities.
+- The README summarizes the current personal portfolio copy and links here for original team responsibilities.
 - This document records implementation contributions where work ownership changed during project execution.

@@ -1,6 +1,6 @@
 # Repository Structure
 
-This is a layout guide; the detailed tree below records the 6 October 2026 snapshot. The current run record is `docs/current_run.md`; model/report mismatch checks are in `tests/test_model_report_consistency.py`.
+This is a layout guide; the detailed tree below records the 6 October 2026 technical snapshot, with portfolio/process records subsequently moved out of this implementation repository. The current run record is `docs/current_run.md`; model/report mismatch checks are in `tests/test_model_report_consistency.py`.
 
 For a shorter, narrative summary of the structure aimed at someone just getting started, see `README.md`'s "Repository Structure" section. This document is the detailed, complete counterpart to that summary.
 
@@ -137,11 +137,9 @@ customer-churn-platform/
 ├── docker-compose.yml                      # Local api + streamlit services
 ├── Makefile                                # Docker/Compose and test shortcuts
 ├── README.md                               # Setup, architecture, running instructions, API reference, dashboard setup
-├── PROCESS.md                              # Git workflow, PR requirements, definition of done, review process (added Issue #20)
 ├── STRUCTURE.md                            # This file
 ├── CONTRIBUTORS.md                         # Actual-vs-planned ownership record across the sprint
 ├── Project Specification.md                # Component-by-component contract used during PR review
-├── PROJECT_EVIDENCE_CHURN.md               # Dated (2026-09-26) evidence record about the ORIGINAL team repository
 ```
 
 ---
