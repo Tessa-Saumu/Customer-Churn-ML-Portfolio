@@ -1,6 +1,6 @@
 # Customer Churn: Model Integration and Evaluation
 
-A local telecom analytics pipeline loads customer data, serves churn predictions and metrics through an API, and supplies a Power BI report.
+A team analytics pipeline connects customer data, churn predictions and BI reporting. As team lead and final integration contributor, I connected the trained model to FastAPI, aligned request and training schemas, and contributed the tests needed to make the components work together.
 
 ## The problem
 
@@ -8,7 +8,7 @@ The team needed to connect cleaned customer data, model predictions and dashboar
 
 ## What I built
 
-I connected the application programming interface (API) to the trained model, reconciled its request fields with the training schema, and added configurable artifact paths. Integration testing exposed an outcome-derived `churn_score` input; it was removed from training. I also wrote tests for data preparation, API behavior and prediction, contributed SQL-view checks, and coordinated technical review and final integration.
+As team lead, I coordinated technical review and final integration, connected the application programming interface (API) to the trained model, reconciled its request fields with the training schema, and added configurable artifact paths. Integration testing exposed an outcome-derived `churn_score` input; it was removed from training. I also wrote tests for data preparation, API behavior and prediction and contributed SQL-view checks alongside the team's data, modelling and reporting work.
 
 The data preparation, initial training, API scaffold and Power BI report had other team owners. Mentor Adeyeri Michael contributed scaffolding and customer pagination. [CONTRIBUTORS.md](CONTRIBUTORS.md) records those boundaries. This personal portfolio copy also contains subsequent repairs to evaluation, reproducibility and packaging.
 
@@ -47,6 +47,8 @@ Training now saves the selected model with its holdout metrics and the exact rep
 Dependencies and the runtime are pinned. These checks establish local behavior; Docker and the optional Streamlit client were not verified in this release. No green GitHub Actions result is claimed while account billing blocks runs.
 
 ## Results
+
+The integrated local API serves customer records, dataset KPIs, churn predictions and metrics tied to the loaded model. The request contract, prediction artifact and evaluation report can be inspected together through [API examples](docs/api_examples.md) and the [model comparison](evaluation/model_comparison.md).
 
 The current recorded run used **Python 3.11.12 on Windows** and selected Logistic Regression:
 
